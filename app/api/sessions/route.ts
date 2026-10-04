@@ -1,0 +1,51 @@
+import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { database } from '@/db';
+import { activities, indiaDay } from '@/lib/stopwatch';
+export const dynamic = 'force-dynamic';
+const response = (data: unknown, status=200) => Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
+async function read(owner: string) {
+ const rows = await database().prepare('SELECT * FROM sessions WHERE owner = ? ORDER BY started_at DESC').bind(owner).all();
+ return {sessions:rows.results,now:Date.now()};
+}
+export async function GET() {
+ const user = await getChatGPTUser(); if (!user) return response({error:'Please sign in to load your sessions.'},401);
+ try { return response(await read(user.userId)); }
+ catch(e) { console.error('Load sessions failed',e); return response({error:'Your records could not be loaded. Please retry.'},503); }
+}
+export async function POST(request: Request) {
+ const user = await getChatGPTUser(); if (!user) return response({error:'Please sign in to save your session.'},401);
+ const origin=request.headers.get('origin');
+ if (origin && origin !== new URL(request.url).origin) return response({error:'Invalid request origin.'},403);
+ let b: Record<string,unknown>;
+ try { b=await request.json(); } catch { return response({error:'Invalid request.'},400); }
+ if (!b || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(b.id)) return response({error:'Invalid session.'},400);
+ const now=Date.now(), owner=user.userId;
+ try {
+ const db=database();
+ if(b.action==='start') {
+  if(typeof b.activity!=='string' || !activities.some(a=>a.name===b.activity)) return response({error:'Choose one of the three learning activities.'},400);
+  const existing=await db.prepare('SELECT id FROM sessions WHERE id = ? AND owner = ?').bind(b.id,owner).first();
+  if(!existing) {
+   const active=await db.prepare("SELECT id FROM sessions WHERE owner = ? AND state != 'stopped'").bind(owner).first();
+   if(active) return response({...await read(owner),error:'Another session is open. Your timer has been refreshed.'},409);
+   await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,day,elapsed_ms,resumed_at,version,what) VALUES (?,?,?,'running',?,?,0,?,0,'')").bind(b.id,owner,b.activity,now,indiaDay(now),now).run();
+  }
+ } else {
+  if(!Number.isInteger(b.version) || Number(b.version)<0) return response({error:'Invalid timer version.'},400);
+  let result;
+  if(b.action==='pause') {
+   result=await db.prepare("UPDATE sessions SET elapsed_ms = elapsed_ms + MAX(0, ? - resumed_at), resumed_at = NULL, state = 'paused', version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'running'").bind(now,b.id,owner,b.version).run();
+  } else if(b.action==='resume') {
+   result=await db.prepare("UPDATE sessions SET resumed_at = ?, state = 'running', version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'paused'").bind(now,b.id,owner,b.version).run();
+  } else if(b.action==='stop') {
+   if(typeof b.what!=='string' || b.what.length>2000) return response({error:'Keep the session note under 2,000 characters.'},400);
+   result=await db.prepare("UPDATE sessions SET elapsed_ms = elapsed_ms + CASE WHEN state = 'running' THEN MAX(0, ? - resumed_at) ELSE 0 END, resumed_at = NULL, stopped_at = ?, state = 'stopped', what = ?, version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state IN ('running','paused')").bind(now,now,b.what.trim(),b.id,owner,b.version).run();
+  } else if(b.action==='edit') {
+   if(typeof b.minutes!=='number' || !Number.isFinite(b.minutes) || b.minutes<0 || b.minutes>100000 || typeof b.what!=='string' || b.what.length>2000) return response({error:'Enter a valid duration and note.'},400);
+   result=await db.prepare("UPDATE sessions SET elapsed_ms = ?, what = ?, version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'stopped'").bind(Math.round(b.minutes*60000),b.what.trim(),b.id,owner,b.version).run();
+  } else return response({error:'Unknown timer action.'},400);
+  if(!result.meta.changes) return response({...await read(owner),error:'This session changed in another tab. Your records have been refreshed.'},409);
+ }
+ return response(await read(owner));
+ } catch(e) {console.error('Save session failed',e);return response({error:'Could not confirm the save. Retry loading your records before trying again.'},503);}
+}
