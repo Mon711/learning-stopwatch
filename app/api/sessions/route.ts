@@ -43,6 +43,8 @@ export async function POST(request: Request) {
   } else if(b.action==='edit') {
    if(typeof b.minutes!=='number' || !Number.isFinite(b.minutes) || b.minutes<0 || b.minutes>100000 || typeof b.what!=='string' || b.what.length>2000) return response({error:'Enter a valid duration and note.'},400);
    result=await db.prepare("UPDATE sessions SET elapsed_ms = ?, what = ?, version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'stopped'").bind(Math.round(b.minutes*60000),b.what.trim(),b.id,owner,b.version).run();
+  } else if(b.action==='delete') {
+   result=await db.prepare('DELETE FROM sessions WHERE id = ? AND owner = ? AND version = ?').bind(b.id,owner,b.version).run();
   } else return response({error:'Unknown timer action.'},400);
   if(!result.meta.changes) return response({...await read(owner),error:'This session changed in another tab. Your records have been refreshed.'},409);
  }
