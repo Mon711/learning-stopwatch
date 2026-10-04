@@ -1,5 +1,18 @@
 # vinext-starter
 
+## Learning Stopwatch connection
+
+The private Site also exposes a stateless, read-only MCP endpoint at `POST /mcp`.
+Connect through the private plugin provisioned by Sites. Hosting manages OAuth
+and supplies the same Site-scoped identity used by the stopwatch UI.
+
+`get_learning_sessions` accepts an optional `date` (`YYYY-MM-DD`, Asia/Kolkata),
+an optional activity filter and `include_in_progress` (false by default).
+Completed totals exclude running and paused sessions. Results contain stable
+session IDs and notes suitable for matching existing spreadsheet entries.
+Every data query filters by the authenticated user's ID; callers cannot provide
+an owner ID. Discovery contains no private records. This endpoint has no writes.
+
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 
 ## Prerequisites
