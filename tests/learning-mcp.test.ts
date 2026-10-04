@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import { addCourse,courseInput,listActivities } from '../lib/courses';
 import { handleLearningMcp } from '../lib/learning-mcp';
 
 const now = Date.parse('2026-10-03T20:30:00Z'); // 4 Oct, 02:00 IST.
@@ -19,6 +21,7 @@ type RpcReply = {
 };
 function fixture(owner: string | null = 'owner-a') {
   const sqlite = new DatabaseSync(':memory:');
+  sqlite.exec(readFileSync('drizzle/0001_colorful_firebrand.sql','utf8'));
   sqlite.exec('CREATE TABLE sessions (id TEXT, owner TEXT, activity TEXT, state TEXT, started_at INTEGER, stopped_at INTEGER, day TEXT, elapsed_ms INTEGER, resumed_at INTEGER, version INTEGER, what TEXT)');
   const insert = sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
   insert.run('completed-a', 'owner-a', 'Exercism JavaScript', 'stopped', now - 7200000, now - 6000000, '2026-10-04', 900000, null, 'Finished exercise 6');
@@ -30,7 +33,11 @@ function fixture(owner: string | null = 'owner-a') {
   const db = {
     prepare(sql: string) {
       queries++;
-      return { bind(...args: string[]) { return { async all() { return { results: sqlite.prepare(sql).all(...args) }; } }; } };
+      return { bind(...args: (string|number)[]) { return {
+        async all() { return { results: sqlite.prepare(sql).all(...args) }; },
+        async first() { return sqlite.prepare(sql).get(...args)??null; },
+        async run() { return {meta:{changes:sqlite.prepare(sql).run(...args).changes}}; },
+      }; } };
     },
   } as unknown as D1Database;
   const send = async (method: string, params: unknown = {}, id: unknown = 1, origin?: string) => {
@@ -40,8 +47,33 @@ function fixture(owner: string | null = 'owner-a') {
     }), { userId: async () => owner, database: () => db, now: () => now });
     return { status: response.status, body: await response.json() as RpcReply };
   };
-  return { send, queries: () => queries, close: () => sqlite.close() };
+  return { send,db,sqlite, queries: () => queries, close: () => sqlite.close() };
 }
+
+test('custom courses persist per owner, prevent duplicates and allow safe retries',async()=>{
+ const f=fixture();
+ try{
+  await addCourse(f.db,'owner-a','course-a',{name:'  Rust   fundamentals ',link:'https://example.com/rust'},now);
+  await addCourse(f.db,'owner-a','course-a',{name:'Rust fundamentals',link:'https://example.com/rust'},now);
+  assert.equal((await listActivities(f.db,'owner-a')).filter(a=>a.name==='Rust fundamentals').length,1);
+  assert.equal((await listActivities(f.db,'owner-b')).length,3);
+  await assert.rejects(addCourse(f.db,'owner-a','duplicate',{name:'rust fundamentals'}),/already/);
+  await assert.rejects(addCourse(f.db,'owner-a','default',{name:'scrimba full stack'}),/already/);
+  await addCourse(f.db,'owner-b','course-b',{name:'Rust fundamentals'},now);
+  const own=(await listActivities(f.db,'owner-a')).at(-1)!;
+  assert.equal(own.link,'https://example.com/rust');
+  f.sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)').run('custom-session','owner-a','Rust fundamentals','stopped',now-60000,now,'2026-10-04',60000,null,'Ownership');
+  const r=await f.send('tools/call',{name:'get_learning_sessions',arguments:{activity:'Rust fundamentals'}});
+  assert.equal(r.body.result.structuredContent.total_completed_minutes,1);
+  assert.equal(r.body.result.structuredContent.sessions[0].id,'custom-session');
+ }finally{f.close();}
+});
+
+test('course names and links are validated before saving',()=>{
+ for(const name of ['', '   ', 'a'.repeat(121)])assert.throws(()=>courseInput({name}));
+ for(const link of ['javascript:alert(1)','data:text/html,x','example.com','https://user:pass@example.com'])assert.throws(()=>courseInput({name:'Course',link}));
+ assert.equal(courseInput({name:'Course'}).link,'');
+});
 
 test('discovery exposes only a read-only tool and no private records', async () => {
   const f = fixture(null);
@@ -101,7 +133,8 @@ test('bad dates, owner overrides, invalid filters and write tools are rejected',
     }
     const write = await f.send('tools/call', { name: 'delete_session', arguments: { id: 'completed-a' } });
     assert.equal(write.body.error.code, -32602);
-    assert.equal(f.queries(), 0);
+    // The unknown activity checks the owner's saved course list, never sessions.
+    assert.equal(f.queries(), 1);
   } finally { f.close(); }
 });
 

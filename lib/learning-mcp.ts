@@ -1,4 +1,6 @@
-import { activities, elapsed, indiaDay, type Session } from './stopwatch';
+import { elapsed, indiaDay, type Session } from './stopwatch';
+
+import { listActivities } from './courses';
 
 type Dependencies = {
   userId: () => Promise<string | null>;
@@ -14,7 +16,7 @@ const tool = {
     type: 'object',
     properties: {
       date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Local date, YYYY-MM-DD, in Asia/Kolkata. Omit for today.' },
-      activity: { type: 'string', enum: activities.map(a => a.name), description: 'Optional learning activity filter.' },
+      activity: { type: 'string', minLength: 1, maxLength: 120, description: 'Optional learning activity filter.' },
       include_in_progress: { type: 'boolean', default: false, description: 'Also return running or paused sessions. Completed totals exclude them.' },
     },
     additionalProperties: false,
@@ -64,11 +66,12 @@ export async function handleLearningMcp(request: Request, deps: Dependencies): P
       if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return error(id, -32602, 'Date must be YYYY-MM-DD.');
       const parsed = Date.parse(date + 'T00:00:00Z');
       if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== date) return error(id, -32602, 'Enter a valid calendar date.');
-      if (args.activity !== undefined && !activities.some(a => a.name === args.activity)) return error(id, -32602, 'Unknown learning activity.');
+      if (args.activity !== undefined && (typeof args.activity !== 'string' || !args.activity.length || args.activity.length > 120)) return error(id, -32602, 'Unknown learning activity.');
       if (args.include_in_progress !== undefined && typeof args.include_in_progress !== 'boolean') return error(id, -32602, 'include_in_progress must be a boolean.');
       const owner = await deps.userId();
       if (!owner) return error(id, -32001, 'Connect your Learning Stopwatch account to read sessions.', 401);
       try {
+        if (args.activity !== undefined && !(await listActivities(deps.database(), owner)).some(a => a.name === args.activity)) return error(id, -32602, 'Unknown learning activity.');
         const query = "SELECT id, activity, state, started_at, stopped_at, day, elapsed_ms, resumed_at, version, what FROM sessions WHERE owner = ? AND day = ?" +
           (args.activity === undefined ? '' : ' AND activity = ?') +
           (args.include_in_progress === true ? '' : " AND state = 'stopped'") + ' ORDER BY started_at ASC, id ASC LIMIT 501';
