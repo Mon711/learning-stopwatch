@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `last_operation_id` text;
