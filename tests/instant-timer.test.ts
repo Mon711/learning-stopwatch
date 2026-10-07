@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { InstantTimer,TimerSaveError,type TimerCommand,type TimerSnapshot } from '../lib/instant-timer';
 import { handleSessionRead,handleSessionWrite } from '../lib/session-api';
 import { addCourse } from '../lib/courses';
+import { handleTotalsRead } from '../lib/totals-api';
 import { csv,dailyTotals,elapsed,type Session } from '../lib/stopwatch';
 
 const base=Date.parse('2026-10-05T17:00:00Z');
@@ -177,4 +178,39 @@ test('existing open sessions without operation IDs still support pause, resume a
   assert.equal(stopped.data.sessions[0].elapsed_ms,3000);
   assert.equal(stopped.data.sessions[0].what,'Legacy session');
  }finally{f.close();}
+});
+
+
+test('database totals include all dates, manual and custom sessions and reflect corrections and deletion',async()=>{
+ const f=fixture();
+ try {
+  await addCourse(f.db,'owner-a',randomUUID(),{name:'Rust fundamentals'},base);
+  const id=randomUUID(),otherId=randomUUID();
+  await f.write({action:'manual',id,activity:'Rust fundamentals',start:'2026-10-04T21:00',end:'2026-10-04T21:30',what:''});
+  await f.write({action:'manual',id:otherId,activity:'Scrimba Full Stack',start:'2026-10-05T21:00',end:'2026-10-05T22:00',what:''});
+  const read=async(owner:string|null='owner-a')=>{
+   const response=await handleTotalsRead(owner,()=>f.db);
+   return {status:response.status,data:await response.json() as {elapsedMs:number;sessionCount:number;courses:{name:string;elapsedMs:number;sessionCount:number}[]}};
+  };
+  let result=await read();
+  assert.equal(result.data.elapsedMs,90*60000);
+  assert.equal(result.data.sessionCount,2);
+  assert.equal(result.data.courses.find(c=>c.name==='Rust fundamentals')?.elapsedMs,30*60000);
+  assert.equal(result.data.courses.find(c=>c.name==='Exercism JavaScript')?.sessionCount,0);
+  await f.write({action:'edit_activity',id,version:0,activity:'Exercism JavaScript',minutes:45,what:''});
+  result=await read();
+  assert.equal(result.data.elapsedMs,105*60000);
+  assert.equal(result.data.courses.find(c=>c.name==='Rust fundamentals')?.elapsedMs,0);
+  assert.equal(result.data.courses.find(c=>c.name==='Exercism JavaScript')?.elapsedMs,45*60000);
+  await f.write({action:'edit',id,version:1,minutes:15,what:''});
+  assert.equal((await read()).data.elapsedMs,75*60000);
+  await f.write({action:'start',id:randomUUID(),activity:'Rust fundamentals'},base);
+  assert.equal((await read()).data.sessionCount,2,'open sessions are excluded');
+  await f.write({action:'delete',id,version:2});
+  result=await read();
+  assert.equal(result.data.elapsedMs,60*60000);
+  assert.equal(result.data.sessionCount,1);
+  assert.equal((await read('owner-b')).data.elapsedMs,0);
+  assert.equal((await read(null)).status,401);
+ } finally {f.close();}
 });
