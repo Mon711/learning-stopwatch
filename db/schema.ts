@@ -4,6 +4,7 @@ export const courses = sqliteTable('courses', {
  id: text('id').primaryKey(), owner: text('owner').notNull(), name: text('name').notNull(),
  nameKey: text('name_key').notNull(), link: text('link').notNull().default(''),
  createdAt: integer('created_at').notNull(),
+ type: text('type', { enum: ['Course', 'Skill Practice', 'Project'] }).notNull().default('Course'),
 }, t => [uniqueIndex('idx_courses_owner_name').on(t.owner,t.nameKey)]);
 export const sessions = sqliteTable('sessions', {
  id: text('id').primaryKey(), owner: text('owner').notNull(), activity: text('activity').notNull(),

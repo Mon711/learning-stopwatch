@@ -1,4 +1,41 @@
-# vinext-starter
+# Learning Stopwatch
+
+## Activities
+
+Learning activities can be Course, Skill Practice, or Project. Add an activity
+or use its pencil button to edit its name, optional link, and type. Existing
+activities default to Course, including the three original built-in choices.
+Activity editing is disabled while a stopwatch session is open; stop and save
+it first. All types share the same stopwatch and reporting behavior.
+
+The `courses` table and `/api/courses` endpoint are retained for compatibility.
+Migration `0003_tidy_fat_cobra.sql` only adds a `type` column with a constant
+`Course` default. It does not change any session rows or existing identifiers.
+Changing a type leaves sessions untouched. Renaming updates owned session
+activity references and their conflict-detection versions atomically; IDs,
+notes, timestamps and durations remain intact. Default activity edits are
+stored per owner. CSV exports populate the existing Activity Type column.
+Types describe the activity today, rather than a snapshot for each session.
+
+## Regression checks
+
+From the repository root, `pnpm test` checks TypeScript and runs the activity,
+stopwatch, persistence, migration, totals, and MCP tests against in-memory
+SQLite databases. It changes no application records; compiled test files are
+created in a temporary folder and removed when the command ends.
+
+Browser testing must use a fresh local preview directory without `.env*` or
+existing `.wrangler` state. Verify the local D1 placeholder ID and use only
+Wrangler `--local` commands. Apply migrations 0000–0002, optionally load
+`tests/fixtures/legacy-local.sql` (dummy `local_seedy` records), then apply
+0003. Never run this seed file against a remote database. The current
+portable preview uses that local identity automatically or through its mock
+sign-in route. Production identity and data remain hosting-owned.
+
+The Site source remote and GitHub are separate. Publication uses the existing
+Sites source helper, saved build archive, and project ID in `.openai/hosting.json`.
+GitHub synchronization must preserve existing history and check for unrelated
+remote/local changes before a fast-forward update.
 
 ## Learning Stopwatch connection
 

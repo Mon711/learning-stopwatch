@@ -22,6 +22,7 @@ type RpcReply = {
 function fixture(owner: string | null = 'owner-a') {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(readFileSync('drizzle/0001_colorful_firebrand.sql','utf8'));
+  sqlite.exec("ALTER TABLE courses ADD COLUMN type TEXT NOT NULL DEFAULT 'Course'");
   sqlite.exec('CREATE TABLE sessions (id TEXT, owner TEXT, activity TEXT, state TEXT, started_at INTEGER, stopped_at INTEGER, day TEXT, elapsed_ms INTEGER, resumed_at INTEGER, version INTEGER, what TEXT)');
   const insert = sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
   insert.run('completed-a', 'owner-a', 'Exercism JavaScript', 'stopped', now - 7200000, now - 6000000, '2026-10-04', 900000, null, 'Finished exercise 6');
