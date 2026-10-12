@@ -3,7 +3,8 @@
 ## Activities
 
 Learning activities can be Course, Skill Practice, or Project. Add an activity
-or use its pencil button to edit its name, optional link, and type. Existing
+or use the single Edit activities button, choose an activity, and edit its
+name, optional link, and type. Existing
 activities default to Course, including the three original built-in choices.
 Activity editing is disabled while a stopwatch session is open; stop and save
 it first. All types share the same stopwatch and reporting behavior.
