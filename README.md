@@ -1,5 +1,18 @@
 # Learning Stopwatch
 
+## Screens
+
+The existing navigation now has three screens: Stopwatch, Learning Totals, and
+History. Stopwatch contains activity management, timer controls, session notes,
+and today's summary. History contains all saved sessions, corrections, deletion,
+manual session entry, CSV export, and export guidance. Learning Totals is unchanged.
+
+The screens use `#stopwatch`, `#totals`, and `#history` in the same application.
+Switching screens hides the timer rather than recreating it, preserving its
+instant response, active session, selected activity, and unsaved notes. History
+corrections also stay open across screen switches. No database or API changes
+are needed. History can be bookmarked and supports browser Back/Forward.
+
 ## Activities
 
 Learning activities can be Course, Skill Practice, or Project. Add an activity
