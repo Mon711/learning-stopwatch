@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getLogAccess } from '@/app/log-access';
 import { database } from '@/db';
 import { handleLearningMcp } from '@/lib/learning-mcp';
 
@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   return handleLearningMcp(request, {
-    userId: async () => (await getChatGPTUser())?.userId ?? null,
+    access: getLogAccess,
     database,
   });
 }

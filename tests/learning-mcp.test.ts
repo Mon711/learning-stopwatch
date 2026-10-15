@@ -45,7 +45,7 @@ function fixture(owner: string | null = 'owner-a') {
     const response = await handleLearningMcp(new Request('https://stopwatch.test/mcp', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
       body: JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, params }),
-    }), { userId: async () => owner, database: () => db, now: () => now });
+    }), { access: async () => owner ? { ownerId: owner, readOnly: false, ownerName: null } : null, database: () => db, now: () => now });
     return { status: response.status, body: await response.json() as RpcReply };
   };
   return { send,db,sqlite, queries: () => queries, close: () => sqlite.close() };

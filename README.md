@@ -61,8 +61,44 @@ and supplies the same Site-scoped identity used by the stopwatch UI.
 an optional activity filter and `include_in_progress` (false by default).
 Completed totals exclude running and paused sessions. Results contain stable
 session IDs and notes suitable for matching existing spreadsheet entries.
-Every data query filters by the authenticated user's ID; callers cannot provide
+Every data query filters by the server-authorized owner ID; callers cannot provide
 an owner ID. Discovery contains no private records. This endpoint has no writes.
+
+## Read-only mentor access
+
+The Site supports one explicit read-only sharing grant, configured only in the
+Sites production environment. No session records are copied or changed:
+
+- `LEARNING_SHARED_OWNER_ID`: the learner's existing Site-scoped user ID (not
+  their ChatGPT account ID or the external visitor grant ID).
+- `LEARNING_SHARED_VIEWER_EMAIL`: the invited mentor's verified ChatGPT email.
+- `LEARNING_SHARED_OWNER_NAME`: the learner name shown in the shared view and MCP results.
+
+Keep these values in Sites runtime settings, marked secret; never commit actual
+identities or put them in browser code. For local QA, use dummy values only.
+The viewer must also have access through the Site's existing private audience.
+Sites verifies identity before forwarding browser or MCP requests. The app
+matches the verified email to this explicit grant and resolves reads to the
+configured learner ID. Everyone else continues using their own records. A
+matching viewer with an incomplete owner configuration is denied access.
+
+`app/log-access.ts` loads the configuration; `lib/log-access.ts` resolves access
+and rejects writes. Browser sessions, activities and totals, and the MCP tool
+use the same resolved learner. The browser hides timer and editing controls
+and permits history, totals and CSV export. Session POST and activity POST/PATCH
+return HTTP 403 for the mentor even if invoked outside the UI. The learner
+retains their existing editing behavior. Shared MCP responses include
+`data_owner` and `access: read_only`; the tool accepts no target-user input.
+
+To revoke the grant, remove the viewer's Site invitation, and remove the sharing
+configuration and redeploy. Revocation stops future reads; it cannot retract
+records already exported or returned to ChatGPT. Plugin installation and
+availability in the mentor's own ChatGPT account are separate platform controls;
+a Site invitation alone does not prove that the private plugin is installable.
+
+`pnpm test` covers mentor history/totals/MCP reads, owner isolation, grant
+revocation, anonymous requests and blocked session/activity mutations with
+dummy in-memory SQLite data.
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

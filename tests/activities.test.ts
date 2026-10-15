@@ -84,7 +84,7 @@ test('stopwatch lifecycle, persisted reads, totals, CSV and MCP retrieval work f
    const id=randomUUID();
    const send=async(action:string,at:number,version?:number)=>{const r=await handleSessionWrite(new Request('https://test.local/api/sessions',{method:'POST',body:JSON.stringify({action,id,activity:name,version,at_ms:at,operation_id:randomUUID(),what:'Saved '+type})}),'owner-a',()=>f.db,now+12000);assert.equal(r.status,200);};
    await send('start',now);await send('pause',now+2000,0);await send('resume',now+10000,1);await send('stop',now+12000,2);
-   const rpc=await handleLearningMcp(new Request('https://test.local/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'get_learning_sessions',arguments:{date:'2026-10-10',activity:name}}})}),{userId:async()=>'owner-a',database:()=>f.db});
+   const rpc=await handleLearningMcp(new Request('https://test.local/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'get_learning_sessions',arguments:{date:'2026-10-10',activity:name}}})}),{access:async()=>({ownerId:'owner-a',readOnly:false,ownerName:null}),database:()=>f.db});
    const data=(await rpc.json() as Rpc).result.structuredContent;assert.equal(data.sessions[0].id,id);assert.equal(data.total_completed_minutes,4000/60000);
   }
   const snapshot=await (await handleSessionRead('owner-a',()=>f.db)).json() as Snapshot;assert.equal(snapshot.sessions.length,3);
