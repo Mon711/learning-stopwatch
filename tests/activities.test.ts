@@ -16,7 +16,7 @@ const now=Date.parse('2026-10-10T18:00:00Z');
 function fixture(legacy=false){
  const sqlite=new DatabaseSync(':memory:');
  const files=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort();
- for(const f of legacy?files.slice(0,-1):files)sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
+ for(const f of legacy?files.slice(0,3):files)sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
  const db={prepare(sql:string){const stmt={args:[] as (string|number|null)[],bind(...args:(string|number|null)[]){this.args=args;return this;},async all(){return {results:sqlite.prepare(sql).all(...this.args)};},async first(){return sqlite.prepare(sql).get(...this.args)??null;},async run(){return {meta:{changes:sqlite.prepare(sql).run(...this.args).changes}};}};return stmt;},async batch(statements:{run:()=>Promise<unknown>}[]){sqlite.exec('BEGIN');try{const results=[];for(const statement of statements)results.push(await statement.run());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}} as unknown as D1Database;
  const write=async(input:Record<string,unknown>,owner:string|null='owner-a',method='POST',origin?:string)=>{
   const r=await handleCourseWrite(new Request('https://test.local/api/courses',{method,headers:{'Content-Type':'application/json',...(origin?{Origin:origin}:{})},body:JSON.stringify(input)}),owner,()=>db);
@@ -30,7 +30,7 @@ test('additive migration preserves complete legacy sessions and courses default 
   f.sqlite.exec("INSERT INTO courses VALUES ('legacy','owner-a','Legacy course','legacy course','https://example.com',1)");
   f.sqlite.exec("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,version,what) VALUES ('history','owner-a','Legacy course','stopped',1,60001,'2026-10-01',60000,2,'Original note')");
   const before=f.sqlite.prepare('SELECT * FROM sessions').all();
-  f.sqlite.exec(readFileSync('drizzle/'+f.latest,'utf8'));
+  for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort().slice(3))f.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
   assert.deepEqual(f.sqlite.prepare('SELECT * FROM sessions').all(),before);
   assert.equal((await listActivities(f.db,'owner-a')).find(a=>a.name==='Legacy course')!.type,'Course');
   assert.ok((await listActivities(f.db,'owner-a')).every(a=>a.type==='Course'));
@@ -100,5 +100,47 @@ test('activity writes enforce authentication, ownership and origin checks',async
   await f.write({id,name:'Private'});
   assert.equal((await f.write({id,originalName:'Private',name:'Intruder',type:'Project'},'owner-b','PATCH')).status,409);
   assert.equal((await listActivities(f.db,'owner-a')).at(-1)!.name,'Private');
+ }finally{f.close();}
+});
+
+test('archive, restore and default deletion preserve sessions, totals, CSV and MCP across reloads',async()=>{
+ const f=fixture();try{
+  const id=activities[0].id!,name=activities[0].name;
+  const sid=randomUUID();f.sqlite.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,version,what) VALUES (?,? ,?,'stopped',1,60001,'2026-10-10',60000,0,'Preserve me')").run(sid,'owner-a',name);
+  const before=f.sqlite.prepare('SELECT * FROM sessions').all();
+  const change=(action:string,status:string,extra={})=>f.write({id,action,originalName:name,originalStatus:status,...extra},'owner-a','PATCH');
+  assert.equal((await f.write({id,action:['archive'],originalName:name,originalStatus:'active'},'owner-a','PATCH')).status,409);
+  assert.equal((await change('archive','active',{deleteHistory:true})).status,409);
+  assert.equal((await change('archive','active')).status,200);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM sessions').all(),before);
+  assert.equal((await listActivities(f.db,'owner-a')).find(a=>a.id===id)!.status,'archived');
+  assert.equal((await listActivities(f.db,'owner-b')).find(a=>a.id===id)!.status,undefined);
+  for(const action of ['start','manual']){const r=await handleSessionWrite(new Request('https://test.local/api/sessions',{method:'POST',body:JSON.stringify({action,id:randomUUID(),activity:name,start:'2026-10-10T20:00',end:'2026-10-10T20:30',what:''})}),'owner-a',()=>f.db,now);assert.equal(r.status,400);}
+  assert.equal((await change('restore','archived')).status,200);
+  assert.equal((await change('delete','active')).status,200);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM sessions').all(),before);
+  const snapshot=await (await handleSessionRead('owner-a',()=>f.db)).json() as Snapshot;
+  assert.equal(snapshot.activities.find(a=>a.id===id)!.status,'deleted');assert.ok(csv(snapshot.sessions,snapshot.activities).includes('Preserve me'));
+  const totals=await (await handleTotalsRead('owner-a',()=>f.db)).json() as Totals;assert.equal(totals.elapsedMs,60000);
+  const rpc=async(name:string,args:Record<string,unknown>)=>{const r=await handleLearningMcp(new Request('https://test.local/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})}),{access:async()=>({ownerId:'owner-a',readOnly:false,ownerName:null}),database:()=>f.db});return r.json() as Promise<{result:{structuredContent:{activities:{status:string;total_completed_minutes:number}[];sessions:{id:string}[]}}}>;};
+  assert.equal((await rpc('get_learning_sessions',{date:'2026-10-10',activity:name})).result.structuredContent.sessions[0].id,sid);
+  const data=(await rpc('get_learning_activities',{status:'deleted'})).result.structuredContent;assert.equal(data.activities[0].status,'deleted');assert.equal(data.activities[0].total_completed_minutes,1);
+ }finally{f.close();}
+});
+test('explicit history deletion affects only the selected owner/activity; stale and open-session removals fail safely',async()=>{
+ const f=fixture();try{
+  const id=randomUUID(),other=randomUUID();await addCourse(f.db,'owner-a',id,{name:'Remove history',type:'Project'});await addCourse(f.db,'owner-a',other,{name:'Keep history'});
+  const insert=f.sqlite.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,day,elapsed_ms,version,what) VALUES (?,?,?, ?,1,'2026-10-10',60000,0,'Note')");
+  insert.run('own','owner-a','Remove history','paused');insert.run('other-owner','owner-b','Remove history','stopped');insert.run('other-activity','owner-a','Keep history','stopped');
+  const payload={id,action:'delete',originalName:'Remove history',originalStatus:'active',deleteHistory:true};
+  assert.equal((await f.write(payload,'owner-a','PATCH')).status,409);assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM sessions').get()!.n,3);
+  f.sqlite.exec("UPDATE sessions SET state='stopped' WHERE id='own'");
+  assert.equal((await f.write({...payload,deleteHistory:'true'},'owner-a','PATCH')).status,409);
+  assert.equal((await f.write(payload,'owner-b','PATCH')).status,409);
+  assert.equal((await f.write({...payload,originalName:'Stale'},'owner-a','PATCH')).status,409);
+  assert.equal((await f.write(payload,'owner-a','PATCH')).status,200);
+  assert.deepEqual(f.sqlite.prepare('SELECT id FROM sessions ORDER BY id').all().map(r=>r.id),['other-activity','other-owner']);
+  assert.equal((await listActivities(f.db,'owner-a')).find(a=>a.id===id)!.status,'deleted');
+  const totals=await (await handleTotalsRead('owner-a',()=>f.db)).json() as Totals;assert.ok(!totals.courses.some(c=>c.name==='Remove history'));assert.equal(totals.elapsedMs,60000);
  }finally{f.close();}
 });

@@ -27,20 +27,21 @@ export async function handleSessionWrite(request:Request,owner:string|null,datab
  if(operationId){const already=await db.prepare('SELECT id FROM sessions WHERE id = ? AND owner = ? AND last_operation_id = ?').bind(b.id,owner,operationId).first();if(already)return response(await read(db,owner));}
  const activities=['start','manual','edit_activity'].includes(String(b.action))?await listActivities(db,owner):[];
  if(b.action==='start') {
-  if(typeof b.activity!=='string' || !activities.some(a=>a.name===b.activity)) return response({error:'Choose a learning activity from your list.'},400);
+  if(typeof b.activity!=='string' || !activities.some(a=>a.name===b.activity&&(!a.status||a.status==='active'))) return response({error:'Choose a learning activity from your list.'},400);
   const existing=await db.prepare('SELECT id FROM sessions WHERE id = ? AND owner = ?').bind(b.id,owner).first();
   if(!existing) {
    const active=await db.prepare("SELECT id FROM sessions WHERE owner = ? AND state != 'stopped'").bind(owner).first();
    if(active) return response({...await read(db,owner),error:'Another session is open. Your timer has been refreshed.'},409);
-   await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,day,elapsed_ms,resumed_at,version,what,last_operation_id) VALUES (?,?,?,'running',?,?,0,?,0,'',?)").bind(b.id,owner,b.activity,at,indiaDay(at),at,operationId).run();
+   const saved=await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,day,elapsed_ms,resumed_at,version,what,last_operation_id) SELECT ?,?,?,'running',?,?,0,?,0,'',? WHERE NOT EXISTS (SELECT 1 FROM courses WHERE owner=? AND name=? AND status!='active')").bind(b.id,owner,b.activity,at,indiaDay(at),at,operationId,owner,b.activity).run();
+   if(!saved.meta.changes)return response({error:'This activity is no longer active. Reload your records.'},409);
   }
  } else if(b.action==='manual') {
-  if(typeof b.activity!=='string'||!activities.some(a=>a.name===b.activity))return response({error:'Choose a learning activity from your list.'},400);
+  if(typeof b.activity!=='string'||!activities.some(a=>a.name===b.activity&&(!a.status||a.status==='active')))return response({error:'Choose a learning activity from your list.'},400);
   if(typeof b.what!=='string'||b.what.length>2000)return response({error:'Keep the session note under 2,000 characters.'},400);
   let range;
   try {range=manualRange(b.start,b.end,now);}catch(e){return response({error:e instanceof Error?e.message:'Enter a valid time range.'},400);}
   const existing=await db.prepare('SELECT id FROM sessions WHERE id = ? AND owner = ?').bind(b.id,owner).first();
-  if(!existing)await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) VALUES (?,?,?,'stopped',?,?,?,?,NULL,0,?)").bind(b.id,owner,b.activity,range.startedAt,range.stoppedAt,range.day,range.elapsedMs,b.what.trim()).run();
+  if(!existing){const saved=await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) SELECT ?,?,?,'stopped',?,?,?,?,NULL,0,? WHERE NOT EXISTS (SELECT 1 FROM courses WHERE owner=? AND name=? AND status!='active')").bind(b.id,owner,b.activity,range.startedAt,range.stoppedAt,range.day,range.elapsedMs,b.what.trim(),owner,b.activity).run();if(!saved.meta.changes)return response({error:'This activity is no longer active. Reload your records.'},409);}
  } else {
   if(!Number.isInteger(b.version) || Number(b.version)<0) return response({error:'Invalid timer version.'},400);
   let result;
@@ -53,7 +54,8 @@ export async function handleSessionWrite(request:Request,owner:string|null,datab
    result=await db.prepare("UPDATE sessions SET elapsed_ms = elapsed_ms + CASE WHEN state = 'running' THEN MAX(0, ? - resumed_at) ELSE 0 END, resumed_at = NULL, stopped_at = MAX(?, started_at, COALESCE(resumed_at, started_at)), state = 'stopped', what = ?, version = version + 1, last_operation_id = ? WHERE id = ? AND owner = ? AND version = ? AND state IN ('running','paused')").bind(at,at,b.what.trim(),operationId,b.id,owner,b.version).run();
   } else if(b.action==='edit'||b.action==='edit_activity') {
    if(typeof b.minutes!=='number' || !Number.isFinite(b.minutes) || b.minutes<0 || b.minutes>100000 || typeof b.what!=='string' || b.what.length>2000) return response({error:'Enter a valid duration and note.'},400);
-   if(b.action==='edit_activity'&&(typeof b.activity!=='string'||!activities.some(a=>a.name===b.activity)))return response({error:'Choose a learning activity from your list.'},400);
+   const original=b.action==='edit_activity'?await db.prepare('SELECT activity FROM sessions WHERE id=? AND owner=?').bind(b.id,owner).first<{activity:string}>():null;
+   if(b.action==='edit_activity'&&(typeof b.activity!=='string'||(!activities.some(a=>a.name===b.activity&&(!a.status||a.status==='active'))&&original?.activity!==b.activity)))return response({error:'Choose a learning activity from your list.'},400);
    result=await db.prepare("UPDATE sessions SET elapsed_ms = ?, what = ?, activity = COALESCE(?, activity), version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'stopped'").bind(Math.round(b.minutes*60000),b.what.trim(),b.action==='edit_activity'?b.activity:null,b.id,owner,b.version).run();
   } else if(b.action==='delete') {
    result=await db.prepare('DELETE FROM sessions WHERE id = ? AND owner = ? AND version = ?').bind(b.id,owner,b.version).run();

@@ -1,6 +1,7 @@
 import { elapsed, indiaDay, type Session } from './stopwatch';
 
 import { listActivities } from './courses';
+import { learningTotals } from './learning-totals';
 import type { LogAccess } from './log-access';
 
 type Dependencies = {
@@ -12,7 +13,7 @@ type Dependencies = {
 const tool = {
   name: 'get_learning_sessions',
   title: 'Read learning sessions',
-  description: 'Read saved learning sessions for one date in Asia/Kolkata. For an authorized mentor this reads the learner whose logs were shared with them; otherwise it reads your own logs. Defaults to today and completed sessions only. Returns stable session IDs, exact minutes and notes. Does not modify sessions or spreadsheets. In-progress sessions are marked separately and excluded from completed totals.',
+  description: 'Read saved learning sessions for one date in Asia/Kolkata. For an authorized mentor this reads the learner whose logs were shared with them; otherwise it reads your own logs. Defaults to today and completed sessions only. Includes preserved history for archived and deleted activities. Returns stable session IDs, exact minutes and notes. Does not modify sessions or spreadsheets. In-progress sessions are marked separately and excluded from completed totals.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -23,6 +24,13 @@ const tool = {
     additionalProperties: false,
   },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+};
+
+const activityTool = {
+ name:'get_learning_activities',title:'Read all learning activities',
+ description:'List active, archived and deleted activities with preserved completed session counts and tracked minutes, across all dates. Deleted history is excluded. Uses the same authorized learner as session reads; read-only.',
+ inputSchema:{type:'object',properties:{status:{type:'string',enum:['all','active','archived','deleted'],default:'all'}},additionalProperties:false},
+ annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
 };
 
 const supportedVersions = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -59,10 +67,21 @@ export async function handleLearningMcp(request: Request, deps: Dependencies): P
       });
     }
     case 'ping': return result({});
-    case 'tools/list': return result({ tools: [tool] });
+    case 'tools/list': return result({ tools: [tool,activityTool] });
     case 'tools/call': {
-      if (params.name !== tool.name) return error(id, -32602, 'Unknown tool.');
+      if (params.name !== tool.name&&params.name!==activityTool.name) return error(id, -32602, 'Unknown tool.');
       const args = params.arguments ?? {};
+      if(params.name===activityTool.name){
+       if(!record(args)||Object.keys(args).some(k=>k!=='status')||(args.status!==undefined&&(typeof args.status!=='string'||!['all','active','archived','deleted'].includes(args.status))))return error(id,-32602,'Invalid activity filter.');
+       const access=await deps.access();if(!access)return error(id,-32001,'Connect your Learning Stopwatch account to read activities.',401);
+       try{
+        const db=deps.database(),activities=await listActivities(db,access.ownerId);
+        const rows=await db.prepare("SELECT * FROM sessions WHERE owner=? AND state='stopped'").bind(access.ownerId).all<Session>();
+        const totals=learningTotals(rows.results,activities);
+        const data={...(access.readOnly?{data_owner:access.ownerName,access:'read_only'}:{}),activities:activities.filter(a=>!args.status||args.status==='all'||(a.status??'active')===args.status).map(a=>{const total=totals.courses.find(c=>c.name===a.name);return {id:a.id,name:a.name,type:a.type,link:a.link,status:a.status??'active',completed_session_count:total?.sessionCount??0,total_completed_minutes:(total?.elapsedMs??0)/60000};})};
+        return result({content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data,isError:false});
+       }catch(e){console.error('MCP activity read failed',e);return result({content:[{type:'text',text:'Activities could not be loaded. Please try again.'}],isError:true});}
+      }
       if (!record(args) || Object.keys(args).some(key => !['date', 'activity', 'include_in_progress'].includes(key))) return error(id, -32602, 'Invalid tool arguments.');
       const now = (deps.now ?? Date.now)();
       const date = args.date ?? indiaDay(now);

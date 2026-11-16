@@ -23,6 +23,7 @@ function fixture(owner: string | null = 'owner-a') {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(readFileSync('drizzle/0001_colorful_firebrand.sql','utf8'));
   sqlite.exec("ALTER TABLE courses ADD COLUMN type TEXT NOT NULL DEFAULT 'Course'");
+  sqlite.exec("ALTER TABLE courses ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   sqlite.exec('CREATE TABLE sessions (id TEXT, owner TEXT, activity TEXT, state TEXT, started_at INTEGER, stopped_at INTEGER, day TEXT, elapsed_ms INTEGER, resumed_at INTEGER, version INTEGER, what TEXT)');
   const insert = sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
   insert.run('completed-a', 'owner-a', 'Exercism JavaScript', 'stopped', now - 7200000, now - 6000000, '2026-10-04', 900000, null, 'Finished exercise 6');
@@ -82,7 +83,7 @@ test('discovery exposes only a read-only tool and no private records', async () 
     const init = await f.send('initialize', { protocolVersion: '2025-03-26' });
     assert.equal(init.body.result.protocolVersion, '2025-03-26');
     const list = await f.send('tools/list');
-    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions']);
+    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities']);
     assert.equal(list.body.result.tools[0].annotations.readOnlyHint, true);
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
@@ -91,8 +92,7 @@ test('discovery exposes only a read-only tool and no private records', async () 
 test('anonymous tool calls never read the database', async () => {
   const f = fixture(null);
   try {
-    const r = await f.send('tools/call', { name: 'get_learning_sessions' });
-    assert.equal(r.status, 401);
+    for(const name of ['get_learning_sessions','get_learning_activities']){const r=await f.send('tools/call',{name});assert.equal(r.status,401);}
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
 });

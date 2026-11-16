@@ -58,6 +58,9 @@ test('browser history, totals and MCP share the same learner records without lea
     assert.deepEqual(rpc.result.structuredContent.sessions.map(s => s.id), ['learner-session']);
     assert.equal(rpc.result.structuredContent.total_completed_minutes, 1);
     assert.equal(JSON.stringify(rpc).includes('private note'), false);
+    const activityResponse=await handleLearningMcp(new Request('https://test.local/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'get_learning_activities',arguments:{}}})}),{access:async()=>access,database:()=>f.db});
+    const activityRpc=await activityResponse.json() as {result:{structuredContent:{data_owner:string;access:string;activities:{total_completed_minutes:number}[]}}};
+    assert.equal(activityRpc.result.structuredContent.data_owner,'Test learner');assert.equal(activityRpc.result.structuredContent.access,'read_only');assert.equal(activityRpc.result.structuredContent.activities.reduce((n,a)=>n+a.total_completed_minutes,0),1);
     const own = await (await handleSessionRead(resolveLogAccess(learner, grant)!.ownerId, () => f.db)).json() as { sessions: { id: string }[] };
     assert.deepEqual(own.sessions.map(s => s.id), ['learner-session']);
     const revoked = await (await handleSessionRead(resolveLogAccess(mentor, {})!.ownerId, () => f.db)).json() as { sessions: { id: string }[] };

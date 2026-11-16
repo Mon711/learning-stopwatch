@@ -13,6 +13,38 @@ instant response, active session, selected activity, and unsaved notes. History
 corrections also stay open across screen switches. No database or API changes
 are needed. History can be bookmarked and supports browser Back/Forward.
 
+## Development workflow
+
+Read `AGENTS.md` before changing this Site. Implement locally, pass automated tests
+and a production build, and delegate real local browser QA before pushing or
+publishing. Choose a currently available fast, lower-cost browser agent for each
+run; model names are intentionally not pinned in the instructions.
+
+## Activity archive and deletion
+
+Use **Manage activities** to archive, restore or delete an activity. Archived
+activities are hidden from new timer/manual-session choices and can be restored.
+Archiving always preserves every session and tracked hour. Deletion also keeps
+history by default. Its confirmation offers a separate, initially unchecked
+**Also permanently delete this activity’s session history and tracked hours**
+option. Selecting it deletes only that owner/activity’s sessions and updates totals.
+
+Activity records use an additive `status` column (`active`, `archived`, `deleted`),
+including per-owner records for the original built-in activities. Existing records
+default to active. Removed records remain in the database for MCP discovery;
+retained sessions remain in History, totals and CSV with their original type.
+New sessions cannot use inactive activities. Corrections may retain an inactive
+session’s existing activity. Removal is rejected while that activity has an open
+timer. Activity names stay reserved, including deleted names, because historical
+sessions identify activities by name. Deleted activities cannot be restored;
+archive an activity when you may want it again.
+
+`get_learning_activities` is a read-only MCP tool with an optional `status` filter
+(`all` by default). It returns active, archived and deleted records and preserved
+completed minutes/session counts across dates. `get_learning_sessions` continues
+to accept archived/deleted activity filters. Explicitly erased history is excluded.
+Both tools enforce the existing owner and mentor access rules.
+
 ## Activities
 
 Learning activities can be Course, Skill Practice, or Project. Add an activity
@@ -42,7 +74,7 @@ Browser testing must use a fresh local preview directory without `.env*` or
 existing `.wrangler` state. Verify the local D1 placeholder ID and use only
 Wrangler `--local` commands. Apply migrations 0000–0002, optionally load
 `tests/fixtures/legacy-local.sql` (dummy `local_seedy` records), then apply
-0003. Never run this seed file against a remote database. The current
+0003 and 0004. Never run this seed file against a remote database. The current
 portable preview uses that local identity automatically or through its mock
 sign-in route. Production identity and data remain hosting-owned.
 
