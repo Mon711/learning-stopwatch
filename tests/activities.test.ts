@@ -1,4 +1,6 @@
 import { learningTotals } from '../lib/learning-totals';
+import { themeBootstrap,themeStorageKey } from '../lib/theme';
+import { runInNewContext } from 'node:vm';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -153,4 +155,15 @@ test('learning totals expose current activity statuses without changing preserve
  assert.equal(totals.elapsedMs,180000);assert.equal(totals.sessionCount,3);
  assert.deepEqual(totals.courses.map(c=>c.status),['active','archived','deleted']);
  assert.ok(totals.courses.every(c=>c.elapsedMs===60000&&c.sessionCount===1));
+});
+
+test('theme starts from the saved preference and tolerates blocked storage',()=>{
+ for(const saved of ['dark','light','unexpected',null]){
+  const document={documentElement:{dataset:{theme:''}}};
+  runInNewContext(themeBootstrap,{document,localStorage:{getItem:(key:string)=>{assert.equal(key,themeStorageKey);return saved;}}});
+  assert.equal(document.documentElement.dataset.theme,saved==='dark'?'dark':'light');
+ }
+ const document={documentElement:{dataset:{theme:''}}};
+ runInNewContext(themeBootstrap,{document,localStorage:{getItem:()=>{throw new Error('Blocked');}}});
+ assert.equal(document.documentElement.dataset.theme,'light');
 });

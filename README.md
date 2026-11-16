@@ -11,6 +11,14 @@ The timeline-style rail follows the selected design; these are activity totals,
 so records are grouped by status rather than session date. History keeps its
 original date-grouped layout. Expanding or collapsing changes no stored records.
 
+## Appearance
+
+The header’s Dark mode / Light mode button switches all three screens, controls,
+dialogs and status cards. Light is the initial default. The choice is stored in
+this browser and restored before the next page paints; it does not sync between
+devices. If browser storage is blocked, switching still works for the current
+page. Appearance changes do not alter sessions, totals or MCP access.
+
 ## Screens
 
 The existing navigation now has three screens: Stopwatch, Learning Totals, and

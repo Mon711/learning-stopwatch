@@ -10,6 +10,7 @@ import { Empty,EmptyTitle,EmptyDescription } from '@/components/ui/empty';
 import { activities as defaultActivities,Activity,ActivityType,activityTypes,Session,clock,duration,elapsed,dailyTotals,indiaDay,indiaTimestamp,manualRange,csv } from '@/lib/stopwatch';
 import { InstantTimer,TimerSaveError,type TimerAction } from '@/lib/instant-timer';
 import LearningTotals from './learning-totals';
+import ThemeToggle from './theme-toggle';
 type Snapshot={sessions:Session[];activities?:Activity[];now:number;error?:string};
 const time=(ms:number)=>new Date(ms).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'numeric',minute:'2-digit'});
 const date=(day:string)=>new Date(day+'T12:00:00+05:30').toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short',year:'numeric'});
@@ -101,7 +102,7 @@ export default function Stopwatch({readOnly=false,ownerName=null}:{readOnly?:boo
  }
  function download(){const url=URL.createObjectURL(new Blob([csv(sessions,activities)],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`Learning_Sessions_${today}.csv`;a.click();URL.revokeObjectURL(url);}
  return <main className="workspace">
-  <header className="masthead"><div className="brand"><Timer size={22} strokeWidth={1.6}/><span>Learning Stopwatch</span></div><span className="private-label">{readOnly?"Read-only access":"Personal workspace"}</span></header>
+  <header className="masthead"><div className="brand"><Timer size={22} strokeWidth={1.6}/><span>Learning Stopwatch</span></div><div className="masthead-actions"><span className="private-label">{readOnly?"Read-only access":"Personal workspace"}</span><ThemeToggle/></div></header>
   {readOnly&&<p className="shared-notice" role="status">Viewing {ownerName}’s learning logs · Read-only. You can view sessions, totals and export CSV.</p>}
   <nav className="screen-nav" aria-label="Workspace screens"><a href="#stopwatch" aria-current={screen==='stopwatch'?'page':undefined}>{readOnly?"Session overview":"Stopwatch"}</a><a href="#totals" aria-current={screen==='totals'?'page':undefined}>Learning Totals</a><a href="#history" aria-current={screen==='history'?'page':undefined}>History</a></nav>
   {screen==='totals'&&<LearningTotals savedRevision={savedRevision} pending={timerPending>0} active={active} ownerName={readOnly?ownerName:null}/>}
