@@ -1,3 +1,4 @@
+import { historyGroups } from '../lib/history';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -143,4 +144,15 @@ test('explicit history deletion affects only the selected owner/activity; stale 
   assert.equal((await listActivities(f.db,'owner-a')).find(a=>a.id===id)!.status,'deleted');
   const totals=await (await handleTotalsRead('owner-a',()=>f.db)).json() as Totals;assert.ok(!totals.courses.some(c=>c.name==='Remove history'));assert.equal(totals.elapsedMs,60000);
  }finally{f.close();}
+});
+
+
+test('history groups active sessions first and preserves descending dates and inactive history exactly once',()=>{
+ const a=[{name:'Current',status:'active'},{name:'Past',status:'archived'},{name:'Removed',status:'deleted'}].map(a=>({...a,short:a.name,description:'Course',link:'',type:'Course' as const})) as Activity[];
+ const sessions=[['one','Current','2026-11-15'],['two','Past','2026-11-16'],['three','Removed','2026-11-14'],['four','Current','2026-11-16']].map(([id,activity,day])=>({id,activity,day,state:'stopped',elapsed_ms:60000,started_at:1,stopped_at:60001,resumed_at:null,version:0,what:''})) as Session[];
+ const groups=historyGroups([...sessions,{...sessions[0],id:'running',state:'running'}],a);
+ assert.deepEqual(groups.map(g=>g.id),['active','inactive']);assert.deepEqual(groups.map(g=>g.count),[2,2]);
+ assert.deepEqual(groups[0].days.map(([day])=>day),['2026-11-16','2026-11-15']);
+ assert.equal(groups.reduce((n,g)=>n+g.total,0),240000);
+ assert.deepEqual(groups.flatMap(g=>g.days.flatMap(([,d])=>d.sessions.map(s=>s.id))).sort(),['four','one','three','two']);
 });
