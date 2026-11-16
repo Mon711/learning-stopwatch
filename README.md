@@ -1,15 +1,15 @@
 # Learning Stopwatch
 
-## History timeline
+## Learning Totals activity groups
 
-History starts with two closed, independently expandable groups: Active first,
-then Archived & inactive (including deleted activities with preserved sessions).
-Each group keeps dates newest first and shows its own session count and total.
-Session boxes show an explicit status badge: green Active, amber Archived, or
-neutral gray Deleted. Status is the activity’s current status. Corrections and
-session deletion remain available inside expanded groups; CSV exports include
-all completed sessions regardless of which groups are open. No stored session
-or total is changed by expanding, collapsing or grouping history.
+Learning Totals starts with two closed, independently expandable groups: Active
+first, then Archived & inactive. Activity boxes show current status: green Active,
+amber Archived, or gray Deleted. The inactive group includes deleted activities
+whose history was preserved. Each group shows an activity count and subtotal;
+the all-time total above both groups always includes all preserved sessions.
+The timeline-style rail follows the selected design; these are activity totals,
+so records are grouped by status rather than session date. History keeps its
+original date-grouped layout. Expanding or collapsing changes no stored records.
 
 ## Screens
 
