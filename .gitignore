@@ -44,3 +44,15 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+
+# Private runtime data, backups and generated review output
+/local-backups/
+/backups/
+/review-artifacts/
+*.sqlite
+*.sqlite-*
+*.sqlite.*
+*.db
+*.db-*
+*.tar.gz
+*.tsbuildinfo

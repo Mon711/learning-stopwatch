@@ -1,7 +1,8 @@
+import { d1 } from './database';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync,readdirSync } from 'node:fs';
 import { addCourse,courseInput,listActivities } from '../lib/courses';
 import { handleLearningMcp } from '../lib/learning-mcp';
 
@@ -21,27 +22,15 @@ type RpcReply = {
 };
 function fixture(owner: string | null = 'owner-a') {
   const sqlite = new DatabaseSync(':memory:');
-  sqlite.exec(readFileSync('drizzle/0001_colorful_firebrand.sql','utf8'));
-  sqlite.exec("ALTER TABLE courses ADD COLUMN type TEXT NOT NULL DEFAULT 'Course'");
-  sqlite.exec("ALTER TABLE courses ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
-  sqlite.exec('CREATE TABLE sessions (id TEXT, owner TEXT, activity TEXT, state TEXT, started_at INTEGER, stopped_at INTEGER, day TEXT, elapsed_ms INTEGER, resumed_at INTEGER, version INTEGER, what TEXT)');
-  const insert = sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
+  for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
+  const insert = sqlite.prepare('INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
   insert.run('completed-a', 'owner-a', 'Exercism JavaScript', 'stopped', now - 7200000, now - 6000000, '2026-10-04', 900000, null, 'Finished exercise 6');
   insert.run('completed-b', 'owner-a', 'Ed Donner AI Engineering', 'stopped', now - 5000000, now - 4000000, '2026-10-04', 1200000, null, 'Read Week 4');
   insert.run('running-a', 'owner-a', 'Exercism JavaScript', 'running', now - 3000000, null, '2026-10-04', 60000, now - 60000, '');
   insert.run('other-owner', 'owner-b', 'Exercism JavaScript', 'stopped', now - 7200000, now - 6000000, '2026-10-04', 999900000, null, 'PRIVATE OTHER USER');
   insert.run('other-day', 'owner-a', 'Exercism JavaScript', 'stopped', now - 90000000, now - 80000000, '2026-10-03', 999900000, null, 'Earlier date');
-  let queries = 0;
-  const db = {
-    prepare(sql: string) {
-      queries++;
-      return { bind(...args: (string|number)[]) { return {
-        async all() { return { results: sqlite.prepare(sql).all(...args) }; },
-        async first() { return sqlite.prepare(sql).get(...args)??null; },
-        async run() { return {meta:{changes:sqlite.prepare(sql).run(...args).changes}}; },
-      }; } };
-    },
-  } as unknown as D1Database;
+  let queries = 0;const queried:string[]=[];
+  const db=d1(sqlite,sql=>{queries++;queried.push(sql);});
   const send = async (method: string, params: unknown = {}, id: unknown = 1, origin?: string) => {
     const response = await handleLearningMcp(new Request('https://stopwatch.test/mcp', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
@@ -49,7 +38,7 @@ function fixture(owner: string | null = 'owner-a') {
     }), { access: async () => owner ? { ownerId: owner, readOnly: false, ownerName: null } : null, database: () => db, now: () => now });
     return { status: response.status, body: await response.json() as RpcReply };
   };
-  return { send,db,sqlite, queries: () => queries, close: () => sqlite.close() };
+  return { send,db,sqlite, queries: () => queries,historyQueries:()=>queried.filter(sql=>/FROM sessions/i.test(sql)).length, close: () => sqlite.close() };
 }
 
 test('custom courses persist per owner, prevent duplicates and allow safe retries',async()=>{
@@ -64,7 +53,7 @@ test('custom courses persist per owner, prevent duplicates and allow safe retrie
   await addCourse(f.db,'owner-b','course-b',{name:'Rust fundamentals'},now);
   const own=(await listActivities(f.db,'owner-a')).at(-1)!;
   assert.equal(own.link,'https://example.com/rust');
-  f.sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)').run('custom-session','owner-a','Rust fundamentals','stopped',now-60000,now,'2026-10-04',60000,null,'Ownership');
+  f.sqlite.prepare('INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)').run('custom-session','owner-a','Rust fundamentals','stopped',now-60000,now,'2026-10-04',60000,null,'Ownership');
   const r=await f.send('tools/call',{name:'get_learning_sessions',arguments:{activity:'Rust fundamentals'}});
   assert.equal(r.body.result.structuredContent.total_completed_minutes,1);
   assert.equal(r.body.result.structuredContent.sessions[0].id,'custom-session');
@@ -83,7 +72,7 @@ test('discovery exposes only a read-only tool and no private records', async () 
     const init = await f.send('initialize', { protocolVersion: '2025-03-26' });
     assert.equal(init.body.result.protocolVersion, '2025-03-26');
     const list = await f.send('tools/list');
-    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities']);
+    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities','get_learning_areas']);
     assert.equal(list.body.result.tools[0].annotations.readOnlyHint, true);
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
@@ -92,7 +81,7 @@ test('discovery exposes only a read-only tool and no private records', async () 
 test('anonymous tool calls never read the database', async () => {
   const f = fixture(null);
   try {
-    for(const name of ['get_learning_sessions','get_learning_activities']){const r=await f.send('tools/call',{name});assert.equal(r.status,401);}
+    for(const name of ['get_learning_sessions','get_learning_activities','get_learning_areas']){const r=await f.send('tools/call',{name});assert.equal(r.status,401);}
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
 });
@@ -134,8 +123,8 @@ test('bad dates, owner overrides, invalid filters and write tools are rejected',
     }
     const write = await f.send('tools/call', { name: 'delete_session', arguments: { id: 'completed-a' } });
     assert.equal(write.body.error.code, -32602);
-    // The unknown activity checks the owner's saved course list, never sessions.
-    assert.equal(f.queries(), 1);
+    // Invalid filters may read the owner's classifications, never session history.
+    assert.equal(f.historyQueries(), 0);
   } finally { f.close(); }
 });
 

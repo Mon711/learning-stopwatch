@@ -1,5 +1,14 @@
 # Learning Stopwatch working agreements
 
+## Start here
+
+- Work locally in this checkout. Read README and `docs/status.md` before significant
+  work; read `docs/architecture.md` for data/permissions/migrations/MCP, and `docs/decisions.md` before
+  changing product semantics. Keep these documents current with meaningful changes.
+- Publish only with user authorization for that release (current release approved
+  17 November 2026). Keep real records/secrets outside Git and synthetic fixtures.
+- Use Git for individual commits; status records current unfinished work and limits.
+
 ## Verify before publishing
 
 1. Open the existing Site source locally and preserve its project ID and audience.
@@ -15,6 +24,17 @@
 - Deleting an activity preserves history and tracked time by default. Delete its sessions only when the user explicitly selects the separate history-deletion option; the option starts unchecked each time.
 - Keep archived/deleted activity records available to authorized MCP reads. Retained sessions continue contributing to totals and exports. Explicitly deleted history cannot be returned.
 - Enforce ownership and read-only mentor restrictions on the server. Block removal while the activity has a running or paused session.
+- Area and type are independent current activity metadata. Moving an activity
+  regroups historical time without rewriting session timing/notes. Default totals
+  grouping is Learning Area. CSV always includes all saved history despite filters.
+- Occupied area deletion requires atomic reassignment of all members, including
+  inactive records. It must never delete an activity/session. Keep stable IDs and
+  compatible names/CSV fields; handle virtual built-ins per owner.
+- Back up before migrations and compare original fields/counts/exact durations.
+  Keep hosted migrations schema-only; owner backfill lives in learning-area-backfill.ts.
+  The local runner has no remote mode; verify the live schema and backfill after publication.
+- MCP stays read-only with owner-safe activity/area reads. Weekly targets and
+  Graphify remain deferred. Add no dependencies for these features.
 
 ## Explanations
 

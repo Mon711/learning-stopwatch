@@ -1,12 +1,19 @@
+import { SelectItem } from '@/components/ui/select';
+import AppSelect from './app-select';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCw,ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { duration, type Session } from '@/lib/stopwatch';
+import LearningFilterControls from './learning-filters';
+import { emptyFilters,matchesActivity } from '@/lib/learning-filters';
+import type { LearningArea } from '@/lib/learning-areas';
+import type { Activity } from '@/lib/stopwatch';
 import type { learningTotals } from '@/lib/learning-totals';
-type Totals = ReturnType<typeof learningTotals> & { updatedAt: number };
+type Totals = ReturnType<typeof learningTotals> & { updatedAt: number;activities:Activity[];areas:LearningArea[] };
 
 export default function LearningTotals({ active, pending, savedRevision, ownerName=null }: { ownerName?: string|null; active: Session | null; pending: boolean; savedRevision: number }) {
  const [totals,setTotals]=useState<Totals|null>(null),[refreshing,setRefreshing]=useState(false),[error,setError]=useState('');
+ const [groupBy,setGroupBy]=useState('area'),[filters,setFilters]=useState({...emptyFilters});
  const request=useRef<AbortController|null>(null);
  const refresh=useCallback(async()=>{
   request.current?.abort();const controller=new AbortController();request.current=controller;setRefreshing(true);
@@ -21,19 +28,30 @@ export default function LearningTotals({ active, pending, savedRevision, ownerNa
  useEffect(()=>{void refresh();return()=>request.current?.abort();},[savedRevision,refresh]);
  const count = (n: number) => `${n} ${n === 1 ? 'session' : 'sessions'}`;
  const ready = !!totals && !error;
+ const filtered=Object.values(filters).some(Boolean);
+ const courses=(totals?.courses??[]).filter(c=>matchesActivity(c,filters));
+ const elapsedMs=courses.reduce((n,c)=>n+c.elapsedMs,0),sessionCount=courses.reduce((n,c)=>n+c.sessionCount,0);
+ const groups=[...new Set(courses.map(c=>groupBy==='area'?c.areaId:c.type))];
  return <section aria-labelledby="totals-title" className="totals-screen">
   <div className="page-heading"><h1 id="totals-title">{ownerName?`${ownerName}’s learning adds up.`:"Your learning adds up."}</h1><p>All-time learning totals across {ownerName?`${ownerName}’s`:"your"} saved history.</p></div>
-  <div className="overall-totals"><div><div className="section-eyebrow">ALL ACTIVITIES · ALL TIME</div><div className="overall-time">{ready ? duration(totals!.elapsedMs) : '—'}</div><p className="secondary">Saved learning time</p></div><div className="overall-count"><strong>{ready ? totals!.sessionCount : '—'}</strong><span>Completed sessions</span></div></div>
+  <div className="overall-totals"><div><div className="section-eyebrow">{filtered?'MATCHING ACTIVITIES':'ALL ACTIVITIES'} · ALL TIME</div><div className="overall-time">{ready ? duration(elapsedMs) : '—'}</div><p className="secondary">{filtered?'Filtered learning time':'Saved learning time'}</p></div><div className="overall-count"><strong>{ready ? sessionCount : '—'}</strong><span>Completed sessions</span></div></div>
   <div className="totals-refresh"><p role="status">{refreshing?'Refreshing totals…':error?'Refresh failed.':totals?'Updated '+new Date(totals.updatedAt).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'numeric',minute:'2-digit',second:'2-digit'})+' · India time':'Loading your learning totals…'}</p><Button variant="outline" disabled={refreshing} onClick={()=>void refresh()}><RotateCw size={14}/>Refresh totals</Button></div>
   {error && <p className="feedback" role="alert">{error} Totals are unavailable until your records load successfully.</p>}
   {pending && <p className="totals-note" role="status">Your session is still saving. These totals include only records already saved to the database.</p>}
-  <div className="totals-course-heading"><h2>Time per activity</h2><span>{ready ? count(totals!.sessionCount) : '—'} across all activities</span></div>
-  {totals&&['active','inactive'].map(group=>{
-   const courses=totals.courses.filter(course=>(course.status==='active')===(group==='active'));
-   return <details className={`totals-group totals-group-${group}`} key={group}><summary><span className="totals-status-dot"/><span>{group==='active'?'Active':'Archived & inactive'}</span><span className="totals-group-count">{courses.length} {courses.length===1?'activity':'activities'}</span><strong>{ready?duration(courses.reduce((n,c)=>n+c.elapsedMs,0)):'—'}</strong><ChevronRight className="totals-chevron" size={22}/></summary><div className="totals-timeline">{!courses.length&&<p className="totals-note">No {group==='active'?'active':'archived or inactive'} activities with tracked time.</p>}{courses.map(course=><article className={`course-total course-total-${course.status}`} key={course.name}><div className="totals-activity-title"><h3>{course.name}</h3><span className={`totals-status totals-status-${course.status}`}>{course.status==='archived'?'Archived':course.status==='deleted'?'Deleted':'Active'}</span></div><span className="secondary">{course.type}</span><strong>{ready?duration(course.elapsedMs):'—'}</strong><p>{ready?count(course.sessionCount):'—'}</p></article>)}</div></details>;
+  {filtered&&ready&&<p className="filter-notice">Filtered from {duration(totals!.elapsedMs)} across all activities. Includes active and inactive history.</p>}
+  <div className="report-toolbar"><label htmlFor="totals-grouping">Group by<AppSelect id="totals-grouping" className="report-select" value={groupBy} onValueChange={value=>setGroupBy(value)}><SelectItem value="area">Learning Area</SelectItem><SelectItem value="activity">Activity</SelectItem><SelectItem value="type">Activity Type</SelectItem></AppSelect></label><LearningFilterControls areas={totals?.areas??[]} activities={totals?.activities??[]} value={filters} onChange={setFilters}/></div>
+  <div className="totals-course-heading"><h2>Time per {groupBy==='area'?'learning area':groupBy==='type'?'activity type':'activity'}</h2><span role="status">{ready ? count(sessionCount) : '—'}{filtered?' matching filters':' across all activities'}</span></div>
+  {totals&&groupBy==='activity'&&['active','inactive'].map(group=>{
+   const list=courses.filter(course=>(course.status==='active')===(group==='active'));
+   return <details className={`totals-group totals-group-${group}`} key={group}><summary><span className="totals-status-dot"/><span>{group==='active'?'Active':'Archived & inactive'}</span><span className="totals-group-count">{list.length} {list.length===1?'activity':'activities'}</span><strong>{ready?duration(list.reduce((n,c)=>n+c.elapsedMs,0)):'—'}</strong><ChevronRight className="totals-chevron" size={22}/></summary><div className="totals-timeline">{!list.length&&<p className="totals-note">No matching {group==='active'?'active':'archived or inactive'} activities.</p>}{list.map(course=><article className={`course-total course-total-${course.status}`} key={course.id}><div className="totals-activity-title"><h3>{course.name}</h3><span className={`totals-status totals-status-${course.status}`}>{course.status==='archived'?'Archived':course.status==='deleted'?'Deleted':'Active'}</span></div><span className="secondary">{course.areaName} · {course.type}</span><strong>{ready?duration(course.elapsedMs):'—'}</strong><p>{ready?count(course.sessionCount):'—'}</p></article>)}</div></details>;
   })}
+  {totals&&groupBy!=='activity'&&groups.map(key=>{
+   const list=courses.filter(c=>(groupBy==='area'?c.areaId:c.type)===key),activeTime=list.filter(c=>c.status==='active').reduce((n,c)=>n+c.elapsedMs,0),inactiveTime=list.filter(c=>c.status!=='active').reduce((n,c)=>n+c.elapsedMs,0);
+   return <details className="report-area-group" key={key}><summary><ChevronRight size={19}/><span>{groupBy==='area'?list[0].areaName:key}</span><small>{list.length} {list.length===1?'activity':'activities'}</small><strong>{ready?duration(activeTime+inactiveTime):'—'}</strong></summary><div className="report-area-content"><p className="report-status-split"><span>Active <b>{ready?duration(activeTime):'—'}</b></span><span>Archived & inactive <b>{ready?duration(inactiveTime):'—'}</b></span></p>{list.map(c=><div className="report-activity-row" key={c.id}><div>{c.name} <span className={`totals-status totals-status-${c.status}`}>{c.status==='active'?'Active':c.status==='archived'?'Archived':'Deleted'}</span><p>{groupBy==='area'?c.type:c.areaName} · {count(c.sessionCount)}</p></div><strong>{ready?duration(c.elapsedMs):'—'}</strong></div>)}</div></details>;
+  })}
+  {ready&&filtered&&!sessionCount&&<div className="report-empty"><h3>No matching learning time</h3><p>Your saved history is preserved. Try another combination or clear filters.</p><Button variant="outline" onClick={()=>setFilters({...emptyFilters})}>Clear all filters</Button></div>}
   {ready && !totals!.sessionCount && <p className="totals-note">No completed sessions yet. Stop and save a stopwatch session, or add one manually, to start building your totals.</p>}
-  <p className="totals-note">Completed stopwatch sessions and manually added sessions are included. Paused time is excluded. Corrections and deletions update these totals.</p>
+  <p className="totals-note">Completed stopwatch sessions and manually added sessions are included. Paused time is excluded. Corrections and deletions update these totals. Areas and types reflect each activity’s current classification.</p>
   {active && <p className="totals-active" role="status">{ownerName?`${ownerName}’s`:"Your"} {active.activity} session is {active.state === 'running' ? 'still running' : 'paused'}. Its time will join these totals when {ownerName?"the learner stops and saves":"you stop and save"} it. <a href="#stopwatch">{ownerName?"View current timer →":"Return to stopwatch →"}</a></p>}
  </section>;
 }

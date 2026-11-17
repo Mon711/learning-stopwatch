@@ -1,4 +1,4 @@
-import { addCourse, editCourse, changeActivityStatus, courseInput, listActivities, ActivityInputError } from './courses';
+import { addCourse, editCourse, changeActivityStatus, assignArea, courseInput, listActivities, ActivityInputError } from './courses';
 import { handleSessionRead } from './session-api';
 const response=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function handleCourseWrite(request:Request,owner:string|null,database:()=>D1Database) {
@@ -9,7 +9,7 @@ export async function handleCourseWrite(request:Request,owner:string|null,databa
  catch(e){return response({error:e instanceof Error?e.message:'Enter an activity name and valid link.'},400);}
  try {
   const db=database();
-  const course=input.action&&request.method==='PATCH'?{name:await changeActivityStatus(db,owner,input.id as string,input)}:await (request.method==='PATCH'?editCourse:addCourse)(db,owner,input.id as string,input);
+  const course=input.action&&request.method==='PATCH'?{name:await (input.action==='set_area'?assignArea:changeActivityStatus)(db,owner,input.id as string,input)}:await (request.method==='PATCH'?editCourse:addCourse)(db,owner,input.id as string,input);
   // Editing can rename session activity references: return the saved snapshot.
   if(request.method==='PATCH'){
    const snapshot=await handleSessionRead(owner,()=>db);

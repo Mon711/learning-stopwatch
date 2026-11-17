@@ -1,9 +1,10 @@
 import { indiaDay,manualRange,type Session } from './stopwatch';
-import { listActivities } from './courses';
+import { listAreas,ensureAreas } from './learning-areas';
+import { listActivities,storedActivityId } from './courses';
 const response = (data: unknown, status=200) => Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 async function read(db:D1Database,owner: string,knownActivities?:Awaited<ReturnType<typeof listActivities>>) {
- const [rows,activities]=await Promise.all([db.prepare('SELECT * FROM sessions WHERE owner = ? ORDER BY started_at DESC').bind(owner).all<Session>(),knownActivities??listActivities(db,owner)]);
- return {sessions:rows.results,activities,now:Date.now()};
+ const [rows,activities]=await Promise.all([db.prepare('SELECT s.*,COALESCE(c.name,s.activity) AS activity FROM sessions s LEFT JOIN courses c ON c.owner=s.owner AND c.id=s.activity_id WHERE s.owner = ? ORDER BY s.started_at DESC').bind(owner).all<Session>(),knownActivities??listActivities(db,owner)]);
+ return {sessions:rows.results,activities,areas:await listAreas(db,owner),now:Date.now()};
 }
 export async function handleSessionRead(owner:string|null,database:()=>D1Database) {
  if (!owner) return response({error:'Please sign in to load your sessions.'},401);
@@ -19,6 +20,7 @@ export async function handleSessionWrite(request:Request,owner:string|null,datab
  if (!b || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(b.id)) return response({error:'Invalid session.'},400);
  try {
  const db=database();
+ await ensureAreas(db,owner);
  const timerAction=['start','pause','resume','stop'].includes(String(b.action));
  if(timerAction&&b.operation_id!==undefined&&(typeof b.operation_id!=='string'||!/^[a-f0-9-]{36}$/i.test(b.operation_id)))return response({error:'Invalid timer operation.'},400);
  if(timerAction&&b.at_ms!==undefined&&(typeof b.at_ms!=='number'||!Number.isSafeInteger(b.at_ms)||b.at_ms<now-86400000||b.at_ms>now+30000))return response({error:'Your timer clock needs refreshing. Reload your records.'},400);
@@ -32,7 +34,7 @@ export async function handleSessionWrite(request:Request,owner:string|null,datab
   if(!existing) {
    const active=await db.prepare("SELECT id FROM sessions WHERE owner = ? AND state != 'stopped'").bind(owner).first();
    if(active) return response({...await read(db,owner),error:'Another session is open. Your timer has been refreshed.'},409);
-   const saved=await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,day,elapsed_ms,resumed_at,version,what,last_operation_id) SELECT ?,?,?,'running',?,?,0,?,0,'',? WHERE NOT EXISTS (SELECT 1 FROM courses WHERE owner=? AND name=? AND status!='active')").bind(b.id,owner,b.activity,at,indiaDay(at),at,operationId,owner,b.activity).run();
+   const saved=await db.prepare("INSERT INTO sessions (id,owner,activity,activity_id,state,started_at,day,elapsed_ms,resumed_at,version,what,last_operation_id) SELECT ?,?,?,?,'running',?,?,0,?,0,'',? WHERE EXISTS (SELECT 1 FROM courses WHERE owner=? AND id=? AND status='active')").bind(b.id,owner,b.activity,storedActivityId(activities.find(a=>a.name===b.activity)!,owner),at,indiaDay(at),at,operationId,owner,storedActivityId(activities.find(a=>a.name===b.activity)!,owner)).run();
    if(!saved.meta.changes)return response({error:'This activity is no longer active. Reload your records.'},409);
   }
  } else if(b.action==='manual') {
@@ -41,7 +43,7 @@ export async function handleSessionWrite(request:Request,owner:string|null,datab
   let range;
   try {range=manualRange(b.start,b.end,now);}catch(e){return response({error:e instanceof Error?e.message:'Enter a valid time range.'},400);}
   const existing=await db.prepare('SELECT id FROM sessions WHERE id = ? AND owner = ?').bind(b.id,owner).first();
-  if(!existing){const saved=await db.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) SELECT ?,?,?,'stopped',?,?,?,?,NULL,0,? WHERE NOT EXISTS (SELECT 1 FROM courses WHERE owner=? AND name=? AND status!='active')").bind(b.id,owner,b.activity,range.startedAt,range.stoppedAt,range.day,range.elapsedMs,b.what.trim(),owner,b.activity).run();if(!saved.meta.changes)return response({error:'This activity is no longer active. Reload your records.'},409);}
+  if(!existing){const saved=await db.prepare("INSERT INTO sessions (id,owner,activity,activity_id,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) SELECT ?,?,?,?,'stopped',?,?,?,?,NULL,0,? WHERE EXISTS (SELECT 1 FROM courses WHERE owner=? AND id=? AND status='active')").bind(b.id,owner,b.activity,storedActivityId(activities.find(a=>a.name===b.activity)!,owner),range.startedAt,range.stoppedAt,range.day,range.elapsedMs,b.what.trim(),owner,storedActivityId(activities.find(a=>a.name===b.activity)!,owner)).run();if(!saved.meta.changes)return response({error:'This activity is no longer active. Reload your records.'},409);}
  } else {
   if(!Number.isInteger(b.version) || Number(b.version)<0) return response({error:'Invalid timer version.'},400);
   let result;
@@ -56,7 +58,7 @@ export async function handleSessionWrite(request:Request,owner:string|null,datab
    if(typeof b.minutes!=='number' || !Number.isFinite(b.minutes) || b.minutes<0 || b.minutes>100000 || typeof b.what!=='string' || b.what.length>2000) return response({error:'Enter a valid duration and note.'},400);
    const original=b.action==='edit_activity'?await db.prepare('SELECT activity FROM sessions WHERE id=? AND owner=?').bind(b.id,owner).first<{activity:string}>():null;
    if(b.action==='edit_activity'&&(typeof b.activity!=='string'||(!activities.some(a=>a.name===b.activity&&(!a.status||a.status==='active'))&&original?.activity!==b.activity)))return response({error:'Choose a learning activity from your list.'},400);
-   result=await db.prepare("UPDATE sessions SET elapsed_ms = ?, what = ?, activity = COALESCE(?, activity), version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'stopped'").bind(Math.round(b.minutes*60000),b.what.trim(),b.action==='edit_activity'?b.activity:null,b.id,owner,b.version).run();
+   result=await db.prepare("UPDATE sessions SET elapsed_ms = ?, what = ?, activity = COALESCE(?, activity), activity_id = COALESCE(?,activity_id), version = version + 1 WHERE id = ? AND owner = ? AND version = ? AND state = 'stopped'").bind(Math.round(b.minutes*60000),b.what.trim(),b.action==='edit_activity'?b.activity:null,b.action==='edit_activity'?storedActivityId(activities.find(a=>a.name===b.activity)!,owner):null,b.id,owner,b.version).run();
   } else if(b.action==='delete') {
    result=await db.prepare('DELETE FROM sessions WHERE id = ? AND owner = ? AND version = ?').bind(b.id,owner,b.version).run();
   } else return response({error:'Unknown timer action.'},400);

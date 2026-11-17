@@ -1,3 +1,4 @@
+import { d1 } from './database';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -14,11 +15,7 @@ const turn=()=>new Promise<void>(resolve=>setImmediate(resolve));
 function fixture(){
  const sqlite=new DatabaseSync(':memory:');
  for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
- const db={prepare(sql:string){return {bind(...args:(string|number|null)[]){return {
-  async all(){return {results:sqlite.prepare(sql).all(...args)};},
-  async first(){return sqlite.prepare(sql).get(...args)??null;},
-  async run(){return {meta:{changes:sqlite.prepare(sql).run(...args).changes}};},
- };}};}} as unknown as D1Database;
+ const db=d1(sqlite);
  const write=async(input:Record<string,unknown>,now=base+30000,owner:string|null='owner-a',origin?:string)=>{
   const response=await handleSessionWrite(new Request('https://stopwatch.test/api/sessions',{method:'POST',headers:{'Content-Type':'application/json',...(origin?{Origin:origin}:{})},body:JSON.stringify(input)}),owner,()=>db,now);
   return {status:response.status,data:await response.json() as TimerSnapshot&{error?:string}};

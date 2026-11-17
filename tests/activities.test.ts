@@ -1,4 +1,5 @@
 import { learningTotals } from '../lib/learning-totals';
+import { ensureAreas } from '../lib/learning-areas';
 import { themeBootstrap,themeStorageKey } from '../lib/theme';
 import { runInNewContext } from 'node:vm';
 import assert from 'node:assert/strict';
@@ -34,7 +35,7 @@ test('additive migration preserves complete legacy sessions and courses default 
   f.sqlite.exec("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,version,what) VALUES ('history','owner-a','Legacy course','stopped',1,60001,'2026-10-01',60000,2,'Original note')");
   const before=f.sqlite.prepare('SELECT * FROM sessions').all();
   for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort().slice(3))f.sqlite.exec(readFileSync('drizzle/'+file,'utf8'));
-  assert.deepEqual(f.sqlite.prepare('SELECT * FROM sessions').all(),before);
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM sessions').all().map(row=>Object.fromEntries(Object.keys(before[0]??row).map(k=>[k,row[k]]))),before.map(r=>({...r})));
   assert.equal((await listActivities(f.db,'owner-a')).find(a=>a.name==='Legacy course')!.type,'Course');
   assert.ok((await listActivities(f.db,'owner-a')).every(a=>a.type==='Course'));
   const totals=await (await handleTotalsRead('owner-a',()=>f.db)).json() as Totals;
@@ -110,6 +111,7 @@ test('archive, restore and default deletion preserve sessions, totals, CSV and M
  const f=fixture();try{
   const id=activities[0].id!,name=activities[0].name;
   const sid=randomUUID();f.sqlite.prepare("INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,version,what) VALUES (?,? ,?,'stopped',1,60001,'2026-10-10',60000,0,'Preserve me')").run(sid,'owner-a',name);
+  await ensureAreas(f.db,'owner-a');
   const before=f.sqlite.prepare('SELECT * FROM sessions').all();
   const change=(action:string,status:string,extra={})=>f.write({id,action,originalName:name,originalStatus:status,...extra},'owner-a','PATCH');
   assert.equal((await f.write({id,action:['archive'],originalName:name,originalStatus:'active'},'owner-a','PATCH')).status,409);
