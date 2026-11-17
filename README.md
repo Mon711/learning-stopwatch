@@ -9,7 +9,7 @@ continuing development. See status for the current release and verification resu
 
 ## Features
 
-- Three familiar screens: Stopwatch, Learning Totals and History. Navigation keeps
+- Four familiar screens: Stopwatch, Learning Totals, History and Goals. Navigation keeps
   the timer, selected activity, unsaved notes and correction drafts mounted.
 - One Learning Area (subject) and one Activity Type (Course, Skill Practice,
   Project) per activity. No extra selection is required for each timer session.
@@ -25,12 +25,53 @@ continuing development. See status for the current release and verification resu
   remains a separate, initially unchecked option in activity deletion.
 - Manual session entry, corrections, notes and full-history CSV. Only completed
   sessions contribute to totals; paused time is excluded. Dates use Asia/Kolkata.
+- Flexible time goals for all learning, multiple selected areas or one activity,
+  with inclusive custom dates and week/fortnight/month presets. Current, upcoming
+  and past goals persist, support edits and track progress from saved sessions.
 - Light/dark themes, responsive layouts, keyboard controls, visible save/retry
   errors, and optional explicitly configured read-only mentor access.
 
 Areas/types describe the activity today. Moving an activity regroups all its saved
 history without changing session dates, notes or durations. Renaming an area
 changes the same subject's label.
+
+## Learning goals
+
+Open **Goals → New goal**, choose a name, dates, target hours/minutes and scope,
+then save. You can edit every setting later. Both dates count in Asia/Kolkata;
+weeks run Monday–Sunday. Next 7/14 Days includes today. Presets only fill the date
+fields; you can select any past or future range, including a single day.
+
+Goals count completed, saved sessions using their start date and exact saved
+milliseconds, excluding pauses and unfinished timers. Creating a goal includes
+matching historical sessions immediately. Each overlapping goal counts the same
+matching sessions independently; sessions are never copied. Above-target progress
+can exceed 100%; the visual bar fills at 100%. Remaining time stops at zero.
+
+A goal moves into Past Goals after its end date in India time and remains until
+you explicitly delete it. **Past results remain live:** correcting/deleting a
+session, moving its activity to another area, or explicitly deleting activity
+history recalculates affected goals, including past goals. Renaming an activity
+or area updates its displayed name. Archiving/deleting an activity while retaining
+its history preserves its contribution. These rules match Learning Totals.
+
+Goal details records the creation date and dated before/after descriptions of goal
+name, date, target and scope edits. It records goal edits, not each session change.
+To delete an area used by any goal, including a past goal or an empty area, first
+edit those goals' scopes in Goals. The area deletion error names affected goals.
+The app never silently replaces a goal's scope with the area's destination.
+Old scope labels remain readable in the goal edit history after area deletion.
+
+Goals save in the existing owner-scoped database, so they survive reloads and are
+available on another signed-in device after refresh. The Goals view refreshes on
+local saved-record changes, entry, window focus and every minute while visible;
+Refresh goals checks immediately. Simultaneous edits use a revision number (a
+saved edit counter) to reject an outdated form instead of overwriting newer work.
+Read-only mentor access can view goals but cannot change them.
+
+Back up goals downloads JSON with definitions, edit history and results as of the
+last refresh. It contains no session copies and is not a database restore or import
+feature. History's existing full-session CSV remains unchanged.
 
 ## Documentation map
 
@@ -62,7 +103,7 @@ compatible name-based/stable-ID references.
 Use Node >=22.13.0 and pinned pnpm 11.25.0. This change was tested with Node 22.20.0.
 The default Node on this machine is older; select a compatible installed runtime.
 Use the verified Node 22.20.0 for this change’s tests and migration runner, which
-use Node’s SQLite backup API. No new application dependencies were added for Learning Areas.
+use Node’s SQLite backup API. No new application dependencies were added for Learning Areas or Goals.
 
 Run commands from this source checkout, or from a fresh isolated browser-QA copy.
 The `rtk proxy` prefix forwards the command without filtering its behavior.
@@ -92,6 +133,8 @@ Initialize a fresh local database with migrations 0000–0004 in order. Optional
 load tests/fixtures/legacy-local.sql before migration 0003; it contains invented
 records. Apply the new area migration through the guarded runner below. Do not
 blindly replay SQL files: SQLite ALTER TABLE ADD is not itself repeatable.
+After 0005, apply 0006_learning_goals.sql once to that local preview; it only creates
+the empty learning_goals table. Follow the local D1 procedure in Architecture.
 
 ## Backup and migration
 

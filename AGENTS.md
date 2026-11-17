@@ -5,8 +5,9 @@
 - Work locally in this checkout. Read README and `docs/status.md` before significant
   work; read `docs/architecture.md` for data/permissions/migrations/MCP, and `docs/decisions.md` before
   changing product semantics. Keep these documents current with meaningful changes.
-- Publish only with user authorization for that release (current release approved
-  17 November 2026). Keep real records/secrets outside Git and synthetic fixtures.
+- Publish or push source only with user authorization for that release. Goals is
+  local-only until explicitly approved; the earlier Learning Areas approval does
+  not cover it. Keep real records/secrets outside Git and synthetic fixtures.
 - Use Git for individual commits; status records current unfinished work and limits.
 
 ## Verify before publishing
@@ -33,8 +34,14 @@
 - Back up before migrations and compare original fields/counts/exact durations.
   Keep hosted migrations schema-only; owner backfill lives in learning-area-backfill.ts.
   The local runner has no remote mode; verify the live schema and backfill after publication.
-- MCP stays read-only with owner-safe activity/area reads. Weekly targets and
-  Graphify remain deferred. Add no dependencies for these features.
+- Goals store definitions and lightweight edit history; derive progress from saved
+  completed sessions and current activity classifications, including past goals.
+  Respect inclusive India start-date ranges and sum exact milliseconds.
+- Block area deletion while any current, upcoming or past goal references it;
+  users must edit goal scopes explicitly. Keep reference/revision guards inside
+  writes so concurrent edits cannot leave dangling scopes or partially move areas.
+- MCP stays read-only with owner-safe activity/area reads. Recurrence, Activity
+  Type goals and Graphify remain deferred. Add no dependencies for these features.
 
 ## Explanations
 

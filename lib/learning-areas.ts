@@ -52,14 +52,17 @@ export async function writeArea(db:D1Database,owner:string,input:Record<string,u
   if(!r.meta.changes)throw new AreaInputError('This area changed in another tab. Reload your records.');
   return;
  }
+ const goals=await db.prepare("SELECT name FROM learning_goals WHERE owner=? AND json_extract(scope,'$.kind')='areas' AND EXISTS (SELECT 1 FROM json_each(scope,'$.areaIds') WHERE value=?)").bind(owner,input.id).all<{name:string}>();
+ if(goals.results.length)throw new AreaInputError('This area is used by goals: '+goals.results.map(g=>g.name).join(', ')+'. Edit their scopes in Goals before deleting this area. Past goals are included.');
  const members=await db.prepare('SELECT id FROM courses WHERE owner=? AND area_id=?').bind(owner,input.id).all();
  const destination=areas.find(a=>a.id===input.destinationId&&!a.system&&a.id!==input.id);
  if(members.results.length&&!destination)throw new AreaInputError('Choose another Learning Area for all affected activities.');
  // The guarded move and deletion share one transaction, including open-session checks.
- const allowed="EXISTS (SELECT 1 FROM learning_areas WHERE owner=? AND id=? AND revision=?) AND NOT EXISTS (SELECT 1 FROM sessions s JOIN courses c ON c.owner=s.owner AND (c.id=s.activity_id OR (s.activity_id IS NULL AND c.name=s.activity)) WHERE c.owner=? AND c.area_id=? AND s.state!='stopped')";
+ const allowed="EXISTS (SELECT 1 FROM learning_areas WHERE owner=? AND id=? AND revision=?) AND NOT EXISTS (SELECT 1 FROM sessions s JOIN courses c ON c.owner=s.owner AND (c.id=s.activity_id OR (s.activity_id IS NULL AND c.name=s.activity)) WHERE c.owner=? AND c.area_id=? AND s.state!='stopped') AND NOT EXISTS (SELECT 1 FROM learning_goals g,json_each(g.scope,'$.areaIds') j WHERE g.owner=? AND json_extract(g.scope,'$.kind')='areas' AND j.value=?)";
+ const allowedArgs=[owner,input.id,input.revision,owner,input.id,owner,input.id];
  const statements=[];
- if(destination)statements.push(db.prepare(`UPDATE courses SET area_id=?,revision=revision+1 WHERE owner=? AND area_id=? AND ${allowed} AND EXISTS (SELECT 1 FROM learning_areas WHERE owner=? AND id=? AND system=0)`).bind(destination.id,owner,input.id,owner,input.id,input.revision,owner,input.id,owner,destination.id));
- statements.push(db.prepare(`DELETE FROM learning_areas WHERE owner=? AND id=? AND revision=? AND system=0 AND NOT EXISTS (SELECT 1 FROM courses WHERE owner=? AND area_id=?) AND ${allowed}`).bind(owner,input.id,input.revision,owner,input.id,owner,input.id,input.revision,owner,input.id));
+ if(destination)statements.push(db.prepare(`UPDATE courses SET area_id=?,revision=revision+1 WHERE owner=? AND area_id=? AND ${allowed} AND EXISTS (SELECT 1 FROM learning_areas WHERE owner=? AND id=? AND system=0)`).bind(destination.id,owner,input.id,...allowedArgs,owner,destination.id));
+ statements.push(db.prepare(`DELETE FROM learning_areas WHERE owner=? AND id=? AND revision=? AND system=0 AND NOT EXISTS (SELECT 1 FROM courses WHERE owner=? AND area_id=?) AND ${allowed}`).bind(owner,input.id,input.revision,owner,input.id,...allowedArgs));
  const result=await db.batch(statements);
  if(!result.at(-1)!.meta.changes)throw new AreaInputError('Stop and save affected timers, then reload your records before deleting this area.');
 }

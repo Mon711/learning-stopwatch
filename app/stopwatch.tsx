@@ -11,6 +11,7 @@ import { Empty,EmptyTitle,EmptyDescription } from '@/components/ui/empty';
 import { activities as defaultActivities,Activity,ActivityType,activityTypes,Session,clock,duration,elapsed,dailyTotals,indiaDay,indiaTimestamp,manualRange,csv } from '@/lib/stopwatch';
 import { InstantTimer,TimerSaveError,type TimerAction } from '@/lib/instant-timer';
 import LearningTotals from './learning-totals';
+import LearningGoals from './learning-goals';
 import ThemeToggle from './theme-toggle';
 import AreaManager from './area-manager';
 import LearningFilterControls from './learning-filters';
@@ -25,7 +26,7 @@ function ActivityPicker({id,value,onChange,activities,disabled=false,label='Lear
 export default function Stopwatch({readOnly=false,ownerName=null}:{readOnly?:boolean;ownerName?:string|null}){
  const [screen,setScreen]=useState('stopwatch');
  const [savedRevision,setSavedRevision]=useState(0);
- useEffect(()=>{const navigate=()=>setScreen(window.location.hash==='#totals'?'totals':window.location.hash==='#history'?'history':'stopwatch');navigate();window.addEventListener('hashchange',navigate);return()=>window.removeEventListener('hashchange',navigate);},[]);
+ useEffect(()=>{const navigate=()=>setScreen(window.location.hash==='#totals'?'totals':window.location.hash==='#history'?'history':window.location.hash==='#goals'?'goals':'stopwatch');navigate();window.addEventListener('hashchange',navigate);return()=>window.removeEventListener('hashchange',navigate);},[]);
  const [activities,setActivities]=useState<Activity[]>(defaultActivities);
  const [areas,setAreas]=useState<LearningArea[]>([...initialAreas,unassignedArea]),[courseArea,setCourseArea]=useState(''),[manageAreas,setManageAreas]=useState(false),[historyFilters,setHistoryFilters]=useState({...emptyFilters});
  const availableActivities=activities.filter(a=>!a.status||a.status==='active');
@@ -116,8 +117,9 @@ export default function Stopwatch({readOnly=false,ownerName=null}:{readOnly?:boo
  return <main className="workspace">
   <header className="masthead"><div className="brand"><Timer size={22} strokeWidth={1.6}/><span>Learning Stopwatch</span></div><div className="masthead-actions"><span className="private-label">{readOnly?"Read-only access":"Personal workspace"}</span><ThemeToggle/></div></header>
   {readOnly&&<p className="shared-notice" role="status">Viewing {ownerName}’s learning logs · Read-only. You can view sessions, totals and export CSV.</p>}
-  <nav className="screen-nav" aria-label="Workspace screens"><a href="#stopwatch" aria-current={screen==='stopwatch'?'page':undefined}>{readOnly?"Session overview":"Stopwatch"}</a><a href="#totals" aria-current={screen==='totals'?'page':undefined}>Learning Totals</a><a href="#history" aria-current={screen==='history'?'page':undefined}>History</a></nav>
+  <nav className="screen-nav" aria-label="Workspace screens"><a href="#stopwatch" aria-current={screen==='stopwatch'?'page':undefined}>{readOnly?"Session overview":"Stopwatch"}</a><a href="#totals" aria-current={screen==='totals'?'page':undefined}>Learning Totals</a><a href="#history" aria-current={screen==='history'?'page':undefined}>History</a><a href="#goals" aria-current={screen==='goals'?'page':undefined}>Goals</a></nav>
   <div hidden={screen!=='totals'}><LearningTotals savedRevision={savedRevision} pending={timerPending>0} active={active} ownerName={readOnly?ownerName:null}/></div>
+  <div hidden={screen!=='goals'}><LearningGoals savedRevision={savedRevision} pending={timerPending>0} readOnly={readOnly} today={today} visible={screen==='goals'}/></div>
   <div hidden={screen!=='stopwatch'}>
   <div className="page-heading"><h1 id="stopwatch-title" tabIndex={-1}>{readOnly?`${ownerName}’s learning.`:"A little time, recorded."}</h1><p>{readOnly?"Saved sessions and the current timer.":"Pick up wherever you are."}</p></div>
   <div className="main-grid"><section className="timer-panel" aria-label="Learning stopwatch">
