@@ -1,12 +1,12 @@
 export const activityTypes = ['Course', 'Skill Practice', 'Project'] as const;
 export type ActivityType = typeof activityTypes[number];
-export type Activity={id?:string;name:string;short:string;description:string;link:string;type:ActivityType};
+export type Activity={id?:string;name:string;short:string;description:string;link:string;type:ActivityType;status?:'active'|'archived'|'deleted';recordId?:string;areaId?:string;areaName?:string;revision?:number};
 export const activities:Activity[] = [
  {id:'00000000-0000-4000-8000-000000000001',type:'Course',name:'Scrimba Full Stack',short:'Scrimba',description:'Full Stack Developer Path',link:'https://scrimba.com/fullstack-path-c0fullstack'},
  {id:'00000000-0000-4000-8000-000000000002',type:'Course',name:'Ed Donner AI Engineering',short:'Ed Donner',description:'AI / LLM Engineering',link:'https://www.udemy.com/course/llm-engineering-master-ai-and-large-language-models/'},
  {id:'00000000-0000-4000-8000-000000000003',type:'Course',name:'Exercism JavaScript',short:'Exercism',description:'JavaScript Track',link:'https://exercism.org/tracks/javascript'},
 ];
-export type Session={id:string;activity:string;state:'running'|'paused'|'stopped';started_at:number;stopped_at:number|null;day:string;elapsed_ms:number;resumed_at:number|null;version:number;what:string};
+export type Session={id:string;activity:string;activity_id?:string|null;state:'running'|'paused'|'stopped';started_at:number;stopped_at:number|null;day:string;elapsed_ms:number;resumed_at:number|null;version:number;what:string};
 export function indiaDay(ms:number) {return new Date(ms+19800000).toISOString().slice(0,10);}
 export function indiaTimestamp(ms:number) {return new Date(ms+19800000).toISOString().slice(0,16);}
 export function manualRange(start:unknown,end:unknown,now=Date.now()) {

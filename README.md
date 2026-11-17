@@ -1,190 +1,149 @@
 # Learning Stopwatch
 
-## Screens
+A personal stopwatch with saved learning sessions, notes, history and totals.
+Select an activity → Start → Pause/Resume as needed → Stop & save. Learning_Tracker
+remains a separate main record; CSV export does not synchronize it automatically.
 
-The existing navigation now has three screens: Stopwatch, Learning Totals, and
-History. Stopwatch contains activity management, timer controls, session notes,
-and today's summary. History contains all saved sessions, corrections, deletion,
-manual session entry, CSV export, and export guidance. Learning Totals is unchanged.
+Read [AGENTS.md](AGENTS.md) before changing code and [status](docs/status.md) before
+continuing development. See status for the current release and verification results.
 
-The screens use `#stopwatch`, `#totals`, and `#history` in the same application.
-Switching screens hides the timer rather than recreating it, preserving its
-instant response, active session, selected activity, and unsaved notes. History
-corrections also stay open across screen switches. No database or API changes
-are needed. History can be bookmarked and supports browser Back/Forward.
+## Features
 
-## Activities
+- Three familiar screens: Stopwatch, Learning Totals and History. Navigation keeps
+  the timer, selected activity, unsaved notes and correction drafts mounted.
+- One Learning Area (subject) and one Activity Type (Course, Skill Practice,
+  Project) per activity. No extra selection is required for each timer session.
+- Create/rename areas, inspect their activities and change activity assignments.
+  Deleting an occupied area requires reassignment and preserves every activity,
+  lifecycle status and session. Unassigned is a reserved legacy recovery area.
+- Totals default to Learning Area; Activity and Activity Type remain alternatives.
+  Totals/History have independent, initially collapsed Area/Type/Activity filters.
+  All selected conditions must match. Filters survive navigation, reset on reload,
+  and never change the selected stopwatch activity or CSV contents.
+- Archived activities can be restored. Deleted activities with retained history
+  remain in History, totals, CSV and authorized MCP reads. Actual history deletion
+  remains a separate, initially unchecked option in activity deletion.
+- Manual session entry, corrections, notes and full-history CSV. Only completed
+  sessions contribute to totals; paused time is excluded. Dates use Asia/Kolkata.
+- Light/dark themes, responsive layouts, keyboard controls, visible save/retry
+  errors, and optional explicitly configured read-only mentor access.
 
-Learning activities can be Course, Skill Practice, or Project. Add an activity
-or use the single Edit activities button, choose an activity, and edit its
-name, optional link, and type. Existing
-activities default to Course, including the three original built-in choices.
-Activity editing is disabled while a stopwatch session is open; stop and save
-it first. All types share the same stopwatch and reporting behavior.
+Areas/types describe the activity today. Moving an activity regroups all its saved
+history without changing session dates, notes or durations. Renaming an area
+changes the same subject's label.
 
-The `courses` table and `/api/courses` endpoint are retained for compatibility.
-Migration `0003_tidy_fat_cobra.sql` only adds a `type` column with a constant
-`Course` default. It does not change any session rows or existing identifiers.
-Changing a type leaves sessions untouched. Renaming updates owned session
-activity references and their conflict-detection versions atomically; IDs,
-notes, timestamps and durations remain intact. Default activity edits are
-stored per owner. CSV exports populate the existing Activity Type column.
-Types describe the activity today, rather than a snapshot for each session.
+## Documentation map
 
-## Regression checks
+| Need | Read |
+|---|---|
+| Purpose, features, setup and workflow | This README |
+| Actionable agent constraints and required checks | [AGENTS.md](AGENTS.md) |
+| Components, database, permissions, MCP and migration safety | [Architecture](docs/architecture.md) |
+| Consequential choices and alternatives | [Decisions](docs/decisions.md) |
+| Implemented/unfinished work and current verification | [Status](docs/status.md) |
 
-From the repository root, `pnpm test` checks TypeScript and runs the activity,
-stopwatch, persistence, migration, totals, and MCP tests against in-memory
-SQLite databases. It changes no application records; compiled test files are
-created in a temporary folder and removed when the command ends.
+Use Git for individual commits. Update the owning document with meaningful behavior
+changes. Decisions explain why; status is a current handoff, not a growing diary.
 
-Browser testing must use a fresh local preview directory without `.env*` or
-existing `.wrangler` state. Verify the local D1 placeholder ID and use only
-Wrangler `--local` commands. Apply migrations 0000–0002, optionally load
-`tests/fixtures/legacy-local.sql` (dummy `local_seedy` records), then apply
-0003. Never run this seed file against a remote database. The current
-portable preview uses that local identity automatically or through its mock
-sign-in route. Production identity and data remain hosting-owned.
+## Architecture overview
 
-The Site source remote and GitHub are separate. Publication uses the existing
-Sites source helper, saved build archive, and project ID in `.openai/hosting.json`.
-GitHub synchronization must preserve existing history and check for unrelated
-remote/local changes before a fast-forward update.
+React and TypeScript render the interface through Vinext/Vite. Server routes resolve
+an authenticated owner or authorized read-only learner before reading Cloudflare D1
+(hosted SQLite). Drizzle describes the tables and incremental SQL migrations. Sites
+owns hosting, sign-in and runtime secrets.
 
-## Learning Stopwatch connection
+The main screen coordinates the mounted timer and History; focused components own
+Totals, shared filter controls and area management. Server services validate activity,
+area and session mutations. The architecture document maps the owning files and the
+compatible name-based/stable-ID references.
 
-The private Site also exposes a stateless, read-only MCP endpoint at `POST /mcp`.
-Connect through the private plugin provisioned by Sites. Hosting manages OAuth
-and supplies the same Site-scoped identity used by the stopwatch UI.
+## Local development
 
-`get_learning_sessions` accepts an optional `date` (`YYYY-MM-DD`, Asia/Kolkata),
-an optional activity filter and `include_in_progress` (false by default).
-Completed totals exclude running and paused sessions. Results contain stable
-session IDs and notes suitable for matching existing spreadsheet entries.
-Every data query filters by the authenticated user's ID; callers cannot provide
-an owner ID. Discovery contains no private records. This endpoint has no writes.
+Use Node >=22.13.0 and pinned pnpm 11.25.0. This change was tested with Node 22.20.0.
+The default Node on this machine is older; select a compatible installed runtime.
+Use the verified Node 22.20.0 for this change’s tests and migration runner, which
+use Node’s SQLite backup API. No new application dependencies were added for Learning Areas.
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+Run commands from this source checkout, or from a fresh isolated browser-QA copy.
+The `rtk proxy` prefix forwards the command without filtering its behavior.
 
-## Prerequisites
+1. `rtk proxy pnpm install --frozen-lockfile` restores exact existing dependencies,
+   writes node_modules, may download packages/run their declared install scripts,
+   and fails if the lockfile needs changing. Expect success with no lockfile diff.
+   The existing install:ci shell helper assumes Linux tools; on macOS use the
+   direct frozen install rather than adding unrelated GNU tools.
+2. `rtk proxy pnpm test` checks TypeScript and runs synthetic SQLite tests. It
+   compiles tests into a temporary directory and removes it afterward. It changes
+   no application records. Expect all tests to pass.
+3. `rtk proxy pnpm build` writes local build artifacts under ignored dist. It does
+   not push/deploy. Expect a successful build and route list.
+4. `rtk proxy pnpm dev -- --port 5187 --hostname 127.0.0.1` starts a local server.
+   The port selects its local address; hostname restricts it to this computer.
+   Open the printed Local URL and stop with Control-C. It writes ignored preview
+   state; app actions change only that preview's local database.
 
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
+Browser QA uses a fresh directory without .env files, prior .wrangler state or
+production secrets. Keep the placeholder D1 ID configured by vite.config.ts.
+Portable loopback preview sign-in at /signin-with-chatgpt?return_to=/ uses dummy
+local_seedy identity. Hosted authentication remains platform-owned. Keep all local
+Wrangler operations explicitly --local. Never seed a remote database.
 
-## Sites Lifecycle
+Initialize a fresh local database with migrations 0000–0004 in order. Optionally
+load tests/fixtures/legacy-local.sql before migration 0003; it contains invented
+records. Apply the new area migration through the guarded runner below. Do not
+blindly replay SQL files: SQLite ALTER TABLE ADD is not itself repeatable.
 
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
+## Backup and migration
 
-Run `node <plugin-root>/scripts/configure-execution-profile.mjs` only when the profile is unknown for the current checkout and environment. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
+Schema-only migration 0005 adds the area table, activity area/revision fields and
+stable session references. A separate owner-scoped backfill preserves names, types,
+statuses and session fields, materializes built-ins and retains unmatched history.
+It runs atomically on the first authorized write; reads and mentor access never
+initialize records. An initialization marker makes repeat writes harmless.
 
-This starter does not use `wrangler.jsonc`.
+From the source root:
 
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
+    rtk proxy node scripts/migrate-learning-areas.mjs /absolute/path/local.sqlite /absolute/path/private-backups
 
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
+This changes the named LOCAL database. The first argument must be an existing
+SQLite file; the second is a private backup directory outside Git. Before changes,
+the runner makes a complete SQLite backup and SHA-256 checksum. In one transaction
+it applies only a missing migration and checks original session/activity fields,
+counts, exact durations and owner-safe references before committing. Failure rolls
+back. A successful rerun reports already_applied without reseeding deleted areas or
+replacing assignments. Its output identifies the backup and before/after totals.
 
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
+The runner has no remote mode. Sites applies hosted schema migrations before
+uploading the Worker. Before publication, take a complete private backup, verify
+restoration and the current schema, and review mappings/open timers. After the first
+authorized owner write, compare original fields, counts and exact durations. A failed
+deployment may already have applied schema changes; inspect before retrying.
 
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
+## CSV and read-only MCP
 
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
+CSV exports ALL saved history regardless of report filters, including retained
+inactive records. Its existing six columns and session IDs in Optional Notes remain
+compatible with Learning_Tracker. Running/paused records are excluded.
 
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
+POST /mcp exposes only read tools:
 
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
+- get_learning_sessions: existing date/activity/include_in_progress arguments plus
+  learning_area (name or stable ID) and activity_type. Filters combine with AND.
+  Omitted date still means today in Asia/Kolkata.
+- get_learning_activities: all-time activity totals; optional status, activity,
+  learning_area and activity_type filters, including retained inactive records.
+- get_learning_areas: area IDs and all-time totals with active/inactive time splits.
 
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
+For example, session tool arguments with learning_area AI Engineering, activity_type
+Course and date 2026-11-17 retrieve that combination for that date. Use the activity
+or area tools for all-time totals. New metadata is additive; callers cannot choose
+an owner or write through MCP. Mentor reads use the same resolved learner.
 
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
+## Publication
 
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
-
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
-```
-
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
-
-## Diagnostic Commands
-
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
-
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+The Sites source remote, optional GitHub mirror and live deployment are separate.
+Preserve the existing Site ID and audience. Publish only with user authorization
+and after the Sites/AGENTS checks; use the exact tested source state. Source pushes
+are separate from deployments and must not be assumed to migrate production.
+Never commit personal time logs, backups, databases, environment files, tokens or
+screenshots containing real records. Test fixtures must contain invented data.

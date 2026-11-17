@@ -29,6 +29,20 @@
       "when": 1791816095997,
       "tag": "0003_tidy_fat_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794838323652,
+      "tag": "0004_freezing_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794856449168,
+      "tag": "0005_learning_areas",
+      "breakpoints": true
     }
   ]
 }
