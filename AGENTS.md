@@ -5,9 +5,8 @@
 - Work locally in this checkout. Read README and `docs/status.md` before significant
   work; read `docs/architecture.md` for data/permissions/migrations/MCP, and `docs/decisions.md` before
   changing product semantics. Keep these documents current with meaningful changes.
-- Publish or push source only with user authorization for that release. Goals is
-  local-only until explicitly approved; the earlier Learning Areas approval does
-  not cover it. Keep real records/secrets outside Git and synthetic fixtures.
+- Publish or push source only with user authorization for that release. Goals was
+  approved and published as Version 17 on 17 November 2026. Keep real records/secrets outside Git and synthetic fixtures.
 - Use Git for individual commits; status records current unfinished work and limits.
 
 ## Verify before publishing

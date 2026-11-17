@@ -62,7 +62,7 @@ map are sufficient until a demonstrated navigation problem justifies another too
 
 ## 008 — Flexible goals from saved records
 
-Locally implemented, 17 November 2026; publication awaits explicit approval.
+Approved and published as Sites Version 17, 17 November 2026.
 Supersedes the weekly-target deferral with user-defined, non-recurring periods.
 Add a dedicated fourth Goals screen, leaving the primary timer workflow intact.
 Dates are inclusive India start dates; week presets use Monday–Sunday and rolling
