@@ -1,57 +1,83 @@
 # Current status
 
-17 November 2026 · Learning Areas is live as Sites Version 16.
+17 November 2026 · Flexible Goals is implemented locally; no source push or
+publication is authorized. Production remains Learning Areas, Sites Version 16.
 
-## Implemented
+## Implemented locally
 
-User-managed areas, activity assignments, area-default totals with Activity/Type
-alternatives, combined History/Totals filters, current-classification reporting,
-status-preserving reassignment/deletion, full-history CSV, stable references and
-read-only MCP activity/area queries. Styled dropdown menus have padded animated
-right/down arrows, both themes and reduced-motion support. Weekly targets and
-Graphify remain deferred.
+- Fourth Goals screen with current goals and expandable upcoming/past sections.
+  Name, inclusive dates, target hours/minutes and all-learning/multi-area/single-
+  activity scopes are editable. Week, rolling 7/14-day and month presets only fill
+  editable dates; no personal goal or schedule is hardcoded.
+- Owner-scoped database persistence, exact saved-session progress, above-target
+  percentages, remaining time and creation/edit details. Past goals remain until
+  explicitly deleted and recalculate with corrected source records/classifications.
+- Server validation, mentor write rejection, reference/revision checks and
+  confirmation for goal deletion. Referenced areas cannot be deleted until goal
+  scopes are explicitly updated, including past/empty-area goals. Concurrent goal
+  references block the entire area reassignment transaction.
+- Additive schema-only migration 0006 creates learning_goals. No existing session,
+  activity or area fields are rewritten by that migration. No stored progress
+  ledger, new dependencies, MCP tools, recurrence, reminders or Activity Type goals.
+- Separate JSON goal backup; the full-session CSV and timer workflows stay intact.
+  README, AGENTS, architecture and decisions document the resulting behavior.
 
 ## Verification
 
-- TypeScript and all 37 automated tests pass; production build passes using Node
-  22.20.0 and unchanged locked dependencies in the isolated verification copy.
-- Delegated local browser QA passes area creation/rename/deletion, grouping, combined
-  filters/reset, light/dark themes and 320px layouts. Earlier full QA covers timer
-  saves/notes, inactive history, reassignment, keyboard/Escape and full CSV download.
-- Tests cover owner isolation, migration backups/reruns, exact preservation,
-  retained history, reporting combinations, CSV, timer retries and MCP permissions.
-- Fresh private production backup has a verified checksum and full-field local
-  restoration. Migration rehearsal preserves original session/activity fields,
-  session count and exact durations. Personal counts/totals stay outside Git.
-- Hosted migration is schema-only. The owner-scoped atomic backfill runs on the
-  first authorized write, marks completion last and does not mutate on reads.
+- Node 22.20.0: TypeScript and all 49 automated tests pass; production build passes.
+  The 12 Goals tests cover validation, inclusive India dates, rolling presets/leap
+  month/year changes, exact durations, overlapping scopes, overnight/paused/manual
+  sessions, corrections/deletion, past results, retained inactive records, renames,
+  reclassification, revision/reference races, area protection and owner/mentor access.
+- Migration preservation checks compare all existing session/activity/area fields.
+  Goal operations preserve exact session rows, counts, totals and CSV output.
+  Existing timer retries/conflicts, filters, activity lifecycle and read-only MCP
+  regressions remain green.
+- Isolated synthetic preview: /private/tmp/learning-stopwatch-goals-preview,
+  backend http://127.0.0.1:5191, browser http://localhost:5192/#goals. Temporary
+  preview/browser servers are stopped after QA. It uses exact
+  existing dependencies and no production credentials or copied database state.
+  The disposable 5192 loopback proxy supplies the existing dummy local identity
+  because the browser cannot complete the preview's sign-in redirect. It lives
+  outside shipped source; hosted authentication is unchanged.
+- Delegated browser QA passes all three scopes, retrospective/zero/over-target
+  results, presets/validation, meaningful edit history, reloads, goal confirmation,
+  keyboard/Escape and focus restoration after deletion/date regrouping. Timer and
+  notes survive navigation; pause/resume/save, manual add/correct/delete and goal
+  refresh work. Referenced-area deletion is blocked with the goal named.
+- Desktop 1280×900 and mobile 390×844/320×800 pass in both themes without horizontal
+  overflow. The 320×640 form fits and scrolls with visible footer actions. Actual
+  theme toggles persist correctly across reloads in both directions. Activity
+  rename, archive and restore pass. Complete screenshots were visually reviewed.
+- A filtered History download contains all five synthetic sessions present at
+  export, not just matches. Separate JSON download parses with settings/history
+  and timestamped results. Both downloads are saved as evidence before QA cleanup;
+  the isolated preview now retains only the three seed sessions and four demo goals.
+- Evidence and full test/build logs: sibling
+  review-artifacts/2026-11-17-goals/ (outside source Git). Tests use browser viewport
+  emulation rather than physical phones. Hosted Goals behavior is not yet tested.
 
-## Publication status
+The implementation is ready for an approved production release, subject to the
+backup/migration/publication checks below. No known implementation blockers remain.
 
-Published successfully through Sites from runtime source commit
-`b8c44f9a5acfdda8ae29de18d14480e67813ddc6`. GitHub main received the same source
-tree, preserving its existing history. Hosting applied the additive schema before
-Worker upload. The owner-scoped backfill completed through an authorized area write.
-A temporary empty release-check area was removed; no sessions were created or edited.
+## Release boundary
 
-Live pre/post comparison verified unchanged original session/activity fields, counts
-and exact duration sums, with every stable session reference and area mapped. Exact
-personal counts/totals and complete snapshots remain only in private local backups.
-Live UI verified area grouping, combined area/type filters, reset and retained history.
-MCP reads verified area names/IDs and combined activity/type filters against the
-saved records. Existing audience and read-only mentor configuration are unchanged.
+No Goals migration, goal creation, session mutation, source push or deployment has
+been performed against production. After explicit approval, take a fresh private
+backup, verify restoration/schema and preservation, then follow Sites publication
+checks for the exact tested source. Migration 0006 has only been applied locally.
+Keep the existing Site ID, audience and mentor configuration.
 
-The automated live CSV download check timed out. Full-history CSV regression checks
-and an actual synthetic browser download passed locally; a live download was not
-confirmed. Native D1 recovery is not exposed by the connector; the private logical
-backup was restored locally and the migration rehearsed before deployment.
+## Existing live baseline
 
-## Working notes
+Learning Areas is live as Version 16 from runtime source
+b8c44f9a5acfdda8ae29de18d14480e67813ddc6. Its first authorized owner backfill was
+verified against a restored private logical backup: original fields, counts and
+exact durations were unchanged. No session was created/edited during that release.
+Live area grouping, combined filters, retained history and read-only MCP were
+verified. A live CSV download was not confirmed; synthetic browser download and
+full-history CSV regression checks passed. Native D1 recovery was not exposed.
 
-Source is maintained in the Sites checkout. Private backups and review artifacts
-are in sibling directories outside Git; never publish them. Synthetic verification
-uses `/private/tmp/learning-stopwatch-phase2-qa`, which is disposable and contains
-no production credentials. Some iCloud placeholder dependency reads hang; use the
-resident verification copy with exact locked dependencies rather than changing versions.
-The starter Linux install helper needs GNU tools; portable checks use direct frozen
-pnpm. No extra tools were installed.
+Private backups and review artifacts remain outside Git. iCloud placeholder reads
+can stall Git or dependencies; use resident isolated verification with unchanged
+locked versions rather than weakening checks or changing dependencies.

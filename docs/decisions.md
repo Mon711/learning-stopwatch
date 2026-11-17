@@ -7,7 +7,8 @@ here; explicitly supersede a decision when changing its semantics.
 
 Accepted, 17 November 2026. One user-managed Learning Area describes the subject;
 the existing Activity Type describes how. Store both on the activity so the timer
-requires no extra choices. Multi-area membership and weekly targets are deferred.
+requires no extra choices. Multi-area activity membership remains deferred. Flexible period goals are
+implemented by Decision 008.
 
 ## 002 — Current-classification reporting
 
@@ -25,7 +26,8 @@ Automatic Unassigned movement was rejected as normal UX; it remains legacy recov
 
 ## 004 — Progressive filtering and default area grouping
 
-Accepted with Phase 2 adjustment, 17 November 2026. Keep three navigation screens;
+Accepted with Phase 2 adjustment, 17 November 2026. Originally three navigation
+screens; Decision 008 adds Goals. Continue to
 manage areas inside activity management. Reveal three labeled filters when needed,
 combine with AND, narrow activity choices and keep removable chips visible.
 Learning Area is the default grouping per the Phase 2 instruction. Activity/Type
@@ -56,3 +58,34 @@ action rules; architecture/decisions/status each own one purpose. Update the own
 file with significant behavior changes, using Git for commits. No separate changelog
 or lesson diary is needed. Graphify is deferred: direct search and a small accurate
 map are sufficient until a demonstrated navigation problem justifies another tool.
+
+
+## 008 — Flexible goals from saved records
+
+Locally implemented, 17 November 2026; publication awaits explicit approval.
+Supersedes the weekly-target deferral with user-defined, non-recurring periods.
+Add a dedicated fourth Goals screen, leaving the primary timer workflow intact.
+Dates are inclusive India start dates; week presets use Monday–Sunday and rolling
+7/14-day presets include today. Every field stays editable. Target time is stored
+as integer milliseconds for consistency, with whole-minute input. Scope uses stable
+area/activity IDs and supports all learning, selected areas, or one activity only.
+
+Compute progress from existing completed sessions and today's classifications.
+Past goals remain permanently available until deleted, but their results remain
+live when source sessions or classifications change. Freezing results was rejected
+because it would conflict with corrections, current-area reporting and the single
+source of truth. Independent overlapping goals intentionally share contributions.
+No second session ledger or background expiry job is needed.
+
+Block deletion of areas referenced by any goal until the user explicitly updates
+those goal scopes. Automatically moving a goal to a destination area could include
+unrelated activities and silently alter its meaning. Keep checks inside both goal
+writes and the area transaction for concurrency safety. Activity lifecycle actions
+retain stable records; explicit history deletion recalculates goals normally.
+
+Keep a dated before/after description for meaningful goal-definition edits in its
+row, atomically with the revision update. This makes past changes understandable
+without a separate audit service. Source-record corrections are reflected live,
+not logged as goal edits. An optional JSON backup preserves definitions/edit history
+and timestamped derived results; no new import or CSV format is introduced.
+Recurrence, reminders, Activity Type targets, nested rules and streaks are deferred.

@@ -6,6 +6,8 @@
 |---|---|
 | Resolve owner/mentor identity | `app/page.tsx`, `app/log-access.ts`, `lib/log-access.ts` |
 | Timer, navigation, activity dialog, History | `app/stopwatch.tsx` |
+| Goals UI, presets and exact progress calculation | `app/learning-goals.tsx`, `lib/goals.ts` |
+| Goal persistence and authorized API | `lib/goals-store.ts`, `lib/goals-api.ts`, `app/api/goals/route.ts` |
 | Immediate timer state, queued saves, retries/conflicts | `lib/instant-timer.ts` |
 | Totals grouping, refresh and notices | `app/learning-totals.tsx` |
 | Shared filter controls and predicates | `app/learning-filters.tsx`, `lib/learning-filters.ts` |
@@ -28,7 +30,7 @@ records and paused time. Conflicts refresh saved state; failed saves remain expl
 
 Reads return current activity metadata with sessions/areas. History and Totals use
 the same matching rules. CSV deliberately receives the full saved-session list.
-The three hash-navigation screens stay mounted, preserving timer and form state.
+The four hash-navigation screens stay mounted, preserving timer and form state.
 
 ## Stable identities and compatibility
 
@@ -65,6 +67,63 @@ and deletes only the label in one D1 batch transaction. Archived/deleted statuse
 and complete sessions remain intact. Empty areas also require confirmation.
 Archived activities can change area without restoration; other editing restrictions
 remain. Activity history deletion is a separate flow.
+
+## Goals
+
+Migration 0006 creates only learning_goals. It does not alter existing tables,
+backfill sessions or create example goals. Its composite owner/id key isolates
+records per account. Each row stores name, inclusive start/end days, target in
+whole-minute milliseconds, a JSON scope, revision counter, creation/update times
+and a JSON array of meaningful goal edits. Scopes are all learning, area IDs, or
+one stable public activity ID; owner-specific built-ins resolve through recordId.
+There is no stored progress total, scheduled job, recurring goal or session ledger.
+
+GET /api/goals resolves the authorized learner, reads definitions/current metadata
+and completed sessions within the goals' combined date range. goalProgress maps
+stable activity references (legacy null references fall back to names), matches
+saved session.day inclusively, sums raw elapsed_ms per goal and returns results.
+Paused/running sessions never count, even if the timer's optimistic local state
+already shows stopped. Goals refresh after successful session saves, not local
+stopwatch clicks. Independent overlapping goals never multiply saved session rows.
+A per-request activity map avoids scanning the activity list for every session.
+
+Current/upcoming/past is derived from today's India date. Past results use the
+same current-classification calculation as all other goals: later session edits,
+history deletion or activity reassignment update their results. Display rounding
+never changes matching, completion checks or stored durations. Labels follow
+renames; archive/retained deletion keep stable IDs and contributions.
+
+POST /api/goals shares the owner/mentor write gate and origin checks. Validation
+rejects invalid/reversed dates, empty selections, missing/foreign references,
+non-positive or fractional-minute targets. Goal IDs and scope references are
+server-validated. A guarded INSERT/UPDATE rechecks reference existence; updates
+and deletes require the loaded revision so outdated forms cannot overwrite changes.
+Edits append dated before/after field descriptions in the same UPDATE; no-op edits
+do not produce history. Descriptions preserve old labels without keeping session
+snapshots. Creating with the same ID/definition is retry-safe. Failed requests
+preserve form input and instruct refresh before retrying ambiguous writes.
+
+Area deletion first names referencing goals and blocks deletion, even for empty
+areas and past goals. Its atomic membership-move/delete batch also guards against
+concurrently created/edited goal references. Users edit goal scopes explicitly
+before removal; automatic scope expansion to a destination area was rejected.
+Other goals and every session survive goal deletion. Goal JSON backup exports
+settings/history and derived results with a result timestamp; it is separate from
+session CSV and does not implement import. Existing MCP tools are unchanged.
+
+For a fresh isolated preview only, build to generate dist/server/wrangler.json,
+apply earlier migrations as described in README, then apply the pending Goals
+migration from that preview root:
+
+    rtk proxy node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0006_learning_goals.sql
+
+This changes only the named preview's local D1 database: --local prevents a remote
+operation, --config identifies preview bindings, --persist-to selects preview
+state and --file supplies the schema SQL. Expect a successful CREATE TABLE; verify
+the Goals view can save and reload a synthetic goal. Apply once after checking the
+local schema; do not replay an already-applied CREATE TABLE. Before a later approved
+production release, take/verify a private backup and compare existing fields,
+counts and exact durations. Sites will apply 0006 before uploading the Worker.
 
 ## Permissions and MCP
 

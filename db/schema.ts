@@ -1,5 +1,8 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+export const learningGoals = sqliteTable('learning_goals', {
+ owner:text('owner').notNull(),id:text('id').notNull(),name:text('name').notNull(),startDay:text('start_day').notNull(),endDay:text('end_day').notNull(),targetMs:integer('target_ms').notNull(),scope:text('scope').notNull(),revision:integer('revision').notNull().default(0),createdAt:integer('created_at').notNull(),updatedAt:integer('updated_at').notNull(),history:text('history').notNull().default('[]'),
+}, t=>[primaryKey({columns:[t.owner,t.id]})]);
 export const learningAreas = sqliteTable('learning_areas', {
  owner:text('owner').notNull(),id:text('id').notNull(),name:text('name').notNull(),nameKey:text('name_key').notNull(),revision:integer('revision').notNull().default(0),system:integer('system').notNull().default(0),createdAt:integer('created_at').notNull(),
 }, t=>[primaryKey({columns:[t.owner,t.id]}),uniqueIndex('idx_areas_owner_name').on(t.owner,t.nameKey)]);
