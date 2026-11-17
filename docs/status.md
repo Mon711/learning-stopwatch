@@ -1,9 +1,9 @@
 # Current status
 
-17 November 2026 · Flexible Goals is implemented locally; no source push or
-publication is authorized. Production remains Learning Areas, Sites Version 16.
+17 November 2026 · Flexible Goals is live as Sites Version 17 after explicit
+backup, source push and deployment approval.
 
-## Implemented locally
+## Implemented
 
 - Fourth Goals screen with current goals and expandable upcoming/past sections.
   Name, inclusive dates, target hours/minutes and all-learning/multi-area/single-
@@ -55,18 +55,44 @@ publication is authorized. Production remains Learning Areas, Sites Version 16.
   the isolated preview now retains only the three seed sessions and four demo goals.
 - Evidence and full test/build logs: sibling
   review-artifacts/2026-11-17-goals/ (outside source Git). Tests use browser viewport
-  emulation rather than physical phones. Hosted Goals behavior is not yet tested.
+  emulation rather than physical phones. Hosted verification is recorded below.
 
-The implementation is ready for an approved production release, subject to the
-backup/migration/publication checks below. No known implementation blockers remain.
+The release is deployed and verified. No known implementation blockers remain.
 
-## Release boundary
+## Production release verification
 
-No Goals migration, goal creation, session mutation, source push or deployment has
-been performed against production. After explicit approval, take a fresh private
-backup, verify restoration/schema and preservation, then follow Sites publication
-checks for the exact tested source. Migration 0006 has only been applied locally.
-Keep the existing Site ID, audience and mentor configuration.
+- Fresh complete logical backup: two read-only passes matched without truncation.
+  Its SHA-256 was verified; every field restored into private local SQLite, passed
+  integrity_check, and survived migration 0006 unchanged. Backup and restoration
+  evidence are in sibling local-backups/2026-11-17/goals-release/ outside Git.
+  This is a verified logical backup, not a native D1 recovery bookmark or atomic
+  export. No production records were copied into synthetic test fixtures.
+- Release checkout reran TypeScript/all 49 tests and built successfully. The
+  generic package-manager launcher failed before building due to its Corepack
+  signature setup; direct verified Node 22.20.0 used the existing build script.
+  No dependency, runtime source or hosting identity was changed to fix tooling.
+- Sites source ae70bd9daad26f8cac02e4324493e205454ac1e8 was packaged and deployed
+  successfully as Version 17. GitHub main c4611f3b490d55abfd13d63d215988abd878aca9
+  preserves its separate history. Both and local approved 85b5bfb have identical
+  source tree 5485501c104ffcc7ca12b3dca77e5036dcba7fac. Later documentation-only
+  commits record this release without changing the deployed runtime.
+- Live migration created the expected learning_goals columns and an initially
+  empty table. Full pre/post comparison and a second comparison after live QA
+  verified every original session/activity/area field and row unchanged, with the
+  same counts and exact duration sums. Existing audience/mentor settings remain.
+- Native Chrome verified live goal create, edit, retrospective monthly progress,
+  meaningful change history and reload persistence. Its precise progress matches
+  the saved-session sum independently calculated from the backup. The explicitly
+  authorized temporary verification goal was deleted; no goals or test sessions
+  remain from release QA. No existing session/activity/area was written.
+- Live History and Learning Totals show the preserved records. Read-only MCP area
+  reads work. Chrome reports the production CSV download completed (7.4 KB); its
+  downloaded bytes were not available in the executor for a second content check.
+  Local full-history CSV tests and browser download content checks remain green.
+- The first post-deployment page reused old cached JavaScript hashes and received
+  two chunk 404 responses. A hard refresh loaded Version 17 successfully; repeated
+  subsequent page/API journeys succeeded. If an already-open tab shows a load
+  error after an update, use a hard refresh. This did not affect saved data.
 
 ## Existing live baseline
 
