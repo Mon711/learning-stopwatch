@@ -1,6 +1,6 @@
 # Current status
 
-17 November 2026 · Learning Areas release prepared for authorized publication.
+17 November 2026 · Learning Areas is live as Sites Version 16.
 
 ## Implemented
 
@@ -28,10 +28,23 @@ Graphify remain deferred.
 
 ## Publication status
 
-User approved GitHub update and live deployment on 17 November 2026. Publication
-is in progress; do not infer success until Sites returns a successful deployment.
-After publication verify schema, owner initialization, original field preservation
-and MCP. Preserve the existing audience and read-only mentor permission.
+Published successfully through Sites from runtime source commit
+`b8c44f9a5acfdda8ae29de18d14480e67813ddc6`. GitHub main received the same source
+tree, preserving its existing history. Hosting applied the additive schema before
+Worker upload. The owner-scoped backfill completed through an authorized area write.
+A temporary empty release-check area was removed; no sessions were created or edited.
+
+Live pre/post comparison verified unchanged original session/activity fields, counts
+and exact duration sums, with every stable session reference and area mapped. Exact
+personal counts/totals and complete snapshots remain only in private local backups.
+Live UI verified area grouping, combined area/type filters, reset and retained history.
+MCP reads verified area names/IDs and combined activity/type filters against the
+saved records. Existing audience and read-only mentor configuration are unchanged.
+
+The automated live CSV download check timed out. Full-history CSV regression checks
+and an actual synthetic browser download passed locally; a live download was not
+confirmed. Native D1 recovery is not exposed by the connector; the private logical
+backup was restored locally and the migration rehearsed before deployment.
 
 ## Working notes
 
