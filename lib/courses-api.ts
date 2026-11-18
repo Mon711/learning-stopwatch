@@ -1,3 +1,4 @@
+import { logFailure } from './diagnostics';
 import { addCourse, editCourse, changeActivityStatus, assignArea, courseInput, listActivities, ActivityInputError } from './courses';
 import { handleSessionRead } from './session-api';
 const response=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -10,6 +11,7 @@ export async function handleCourseWrite(request:Request,owner:string|null,databa
  try {
   const db=database();
   const course=input.action&&request.method==='PATCH'?{name:await (input.action==='set_area'?assignArea:changeActivityStatus)(db,owner,input.id as string,input)}:await (request.method==='PATCH'?editCourse:addCourse)(db,owner,input.id as string,input);
+  if(input.response_mode==='ack')return response({saved:true,id:input.id,course:course.name});
   // Editing can rename session activity references: return the saved snapshot.
   if(request.method==='PATCH'){
    const snapshot=await handleSessionRead(owner,()=>db);
@@ -19,7 +21,7 @@ export async function handleCourseWrite(request:Request,owner:string|null,databa
   return response({activities:await listActivities(db,owner),course:course.name});
  } catch(e){
   if(e instanceof ActivityInputError)return response({error:e.message},409);
-  console.error('Save activity failed',e);
+  logFailure('Save activity failed',e);
   return response({error:'Could not confirm the save. Please retry; your activity details are kept here.'},503);
  }
 }

@@ -190,3 +190,12 @@ and after the Sites/AGENTS checks; use the exact tested source state. Source pus
 are separate from deployments and must not be assumed to migrate production.
 Never commit personal time logs, backups, databases, environment files, tokens or
 screenshots containing real records. Test fixtures must contain invented data.
+
+## Local reliability changes awaiting review
+
+The local checkout includes recovery for interrupted timer saves, request deadlines,
+and reduced background report work. These changes are not yet live. See docs/status.md
+for verification and release limits. Recovery copies belong to this browser/account;
+clearing browser storage removes them. If a conflict appears, download/review the
+recovery details before choosing to load newer saved records. An older unsent action
+is not automatically converted into invented historical data.

@@ -1,3 +1,41 @@
+# Local reliability repair — 18 November 2026
+
+Local implementation only, uncommitted and not pushed or published. Production
+remains Version 17. Pending timer commands now have account-scoped browser recovery,
+with a tab-lifetime browser lock, original click timestamps/notes, automatic safe
+retry, explicit conflict review and a downloadable recovery copy. Manual forms keep
+an account-specific recovery draft. Browser storage is a recovery aid, not a backup;
+clearing browser data removes it. Keep the tab open if storage is unavailable.
+
+Compact write acknowledgements separate committed changes from report reads. Timer
+mutations return their affected row atomically with SQL RETURNING; older clients
+still receive their original snapshots. Identical manual retries remain safe;
+changed-input retries require correction. Duplicate operation checks precede the
+24-hour clock guard. Unsaved old/conflicting commands remain available for review.
+
+Browser reads time out after 10 seconds and writes after 15 seconds. Retryable timer
+failures receive three retries, respecting Retry-After, with online/manual recovery.
+Hidden reports no longer fetch; visible refresh triggers are coalesced. Metadata
+reads share areas. History calculations/rows and report rendering are memoized;
+the display tick is one second while click timestamps retain exact milliseconds.
+Safe error diagnostics include phase and session action/operation/duration.
+
+Publication preparation must retain the prior release's hashed client files with
+scripts/retain-client-assets.mjs after building and before packaging. This helper
+is not automatically invoked by ordinary builds. It refuses same-name/different-
+content collisions. The initial HTML has a missing-script recovery message. Actual
+Sites serving of retained assets and cross-release propagation remain unverified;
+publication stays blocked until the prepared artifact passes that hosting check.
+The original production D1 failure's infrastructure cause remains unresolved.
+
+Verification: TypeScript and all 54 automated tests pass. Fresh isolated production
+build and delegated browser tests pass the core recovery/loading/management journeys.
+See the sibling review-artifacts/2026-11-18-reliability-implementation/
+folder for the final browser report. Automated checks and final browser results are
+recorded there when complete. No production records or credentials are test fixtures.
+
+---
+
 # Current status
 
 17 November 2026 · Flexible Goals is live as Sites Version 17 after explicit

@@ -89,3 +89,13 @@ without a separate audit service. Source-record corrections are reflected live,
 not logged as goal edits. An optional JSON backup preserves definitions/edit history
 and timestamped derived results; no new import or CSV format is introduced.
 Recurrence, reminders, Activity Type targets, nested rules and streaks are deferred.
+
+## 009 — Local reliability recovery
+
+18 November 2026, implementation for local review only. Preserve original timer
+commands in owner-scoped browser journals and use existing operation IDs/revisions
+for safe recovery. Compact opt-in write acknowledgements preserve old-client
+compatibility. Keep full history/CSV semantics, avoid dependencies/schema changes,
+and make loading failures recoverable. Conflicts retain a review copy rather than
+overwriting newer records. Publication requires separate authorization plus fresh
+build/browser checks and validation of retained prior client assets on Sites.
