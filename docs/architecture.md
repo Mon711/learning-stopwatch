@@ -175,3 +175,27 @@ Confirm the file-read problem before changing app logic. Verification used resid
 source plus the local changes and a frozen install of existing dependencies outside
 iCloud. Keep tests strict. The older starter pnpm shell installer also assumes
 Linux tools; portable setup uses direct frozen pnpm, not extra GNU installations.
+
+## Local reliability repair (not published)
+
+The page passes only the authenticated writable owner's ID as the recovery namespace.
+InstantTimer persists its pending commands and the necessary confirmed session rows
+before sending; promises are never serialized. A browser lock held for the tab's
+lifetime prevents a second tab adopting its journal. Reload/new-tab recovery chooses
+an unlocked owner journal and replays original IDs/times. A stale version or expired
+unsent timestamp preserves the draft for review rather than abandoning the queue.
+Explicit conflict review saves a separate local copy before loading server state.
+Browser data remains on the user's device; no recovery payload is logged.
+
+response_mode=ack is opt-in on browser write requests. Session acknowledgements
+contain saved/id/operation_id/session/now; deletion returns session=null. Mutations
+use RETURNING so confirmation does not require a subsequent SELECT. Already-applied
+operations can read the affected row. Existing clients retain full-snapshot responses.
+Goal/activity/area acknowledgements return saved and affected identifiers, followed
+by independent reads. Post-save report errors must not imply that a write failed.
+
+The shared boundedFetch supplies read/write deadlines, composed with caller abort
+signals. A browser abort says nothing about whether the database committed. Timer
+retries reuse operation IDs; other management actions remain explicit. Hidden
+report effects do not fetch; request controllers coalesce simultaneous focus events.
+Browser journals are not a substitute for server backups or missing-history repair.

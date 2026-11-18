@@ -1,5 +1,6 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { boundedFetch as fetch } from '@/lib/browser-request';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Pencil, Trash2, RotateCw, ChevronRight, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -17,7 +18,7 @@ function restoreFocus(target: HTMLElement | null) {
  (target?.isConnected && target.getClientRects().length ? target : document.getElementById('goals-title'))?.focus();
 }
 
-export default function LearningGoals({ savedRevision, pending, readOnly, today, visible }: { savedRevision: number; pending: boolean; readOnly: boolean; today: string; visible: boolean }) {
+function LearningGoals({ savedRevision, pending, readOnly, today, visible }: { savedRevision: number; pending: boolean; readOnly: boolean; today: string; visible: boolean }) {
  const [data, setData] = useState<Snapshot | null>(null), [error, setError] = useState(''), [refreshing, setRefreshing] = useState(false), [message, setMessage] = useState('');
  const [open, setOpen] = useState(false), [editing, setEditing] = useState<GoalResult | null>(null), [deleting, setDeleting] = useState<GoalResult | null>(null);
  const [name, setName] = useState(''), [startDay, setStartDay] = useState(today), [endDay, setEndDay] = useState(today), [hours, setHours] = useState(''), [minutes, setMinutes] = useState('');
@@ -25,20 +26,19 @@ export default function LearningGoals({ savedRevision, pending, readOnly, today,
  const [busy, setBusy] = useState(false), [formError, setFormError] = useState(''), [deleteError, setDeleteError] = useState('');
  const request = useRef<AbortController | null>(null), busyRef = useRef(false), goalId = useRef(''), focus = useRef<HTMLElement | null>(null), deleteFocus = useRef<HTMLElement | null>(null);
  const refresh = useCallback(async () => {
-  if (busyRef.current) return;
+  if (busyRef.current||(request.current&&!request.current.signal.aborted)) return;
   request.current?.abort(); const controller = new AbortController(); request.current = controller; setRefreshing(true);
   try {
    const response = await fetch('/api/goals', { cache: 'no-store', signal: controller.signal }), next = await response.json() as Snapshot;
    if (!response.ok) throw new Error(next.error || 'Could not load goals. Please retry.');
    if (!controller.signal.aborted) { setData(next); setError(''); }
   } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : 'Could not load goals. Please retry.'); }
-  finally { if (request.current === controller && !controller.signal.aborted) setRefreshing(false); }
+  finally { if (request.current === controller && !controller.signal.aborted) setRefreshing(false);if(request.current===controller)request.current=null; }
  }, []);
  // A session save can arrive while a goal write temporarily blocks refreshes.
- useEffect(() => { void refresh(); return () => request.current?.abort(); }, [savedRevision, busy, refresh]);
+ useEffect(() => { if(!visible)return;void refresh(); return () => request.current?.abort(); }, [visible,savedRevision,busy,refresh]);
  useEffect(() => {
   if (!visible) return;
-  void refresh();
   const onFocus = () => void refresh(), onVisibility = () => { if (document.visibilityState === 'visible') void refresh(); };
   window.addEventListener('focus', onFocus); document.addEventListener('visibilitychange', onVisibility);
   const interval = setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, 60000);
@@ -55,9 +55,9 @@ export default function LearningGoals({ savedRevision, pending, readOnly, today,
   if (readOnly || busyRef.current) throw new Error('A goal change is already saving or these records are read-only.');
   busyRef.current = true; setBusy(true); request.current?.abort(); setRefreshing(false);
   try {
-   const response = await fetch('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }), next = await response.json() as Snapshot;
+   const response = await fetch('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...input,response_mode:'ack'}) }), next = await response.json() as Snapshot;
    if (!response.ok) throw new Error(next.error || 'Could not save. Your input is kept here.');
-   setData(next); setError('');
+   if(!(next as Snapshot&{saved?:boolean}).saved)setData(next);setError('');
   } finally { busyRef.current = false; setBusy(false); }
  }
  async function save() {
@@ -133,3 +133,5 @@ export default function LearningGoals({ savedRevision, pending, readOnly, today,
   </AlertDialogContent></AlertDialog>
  </section>;
 }
+
+export default memo(LearningGoals);

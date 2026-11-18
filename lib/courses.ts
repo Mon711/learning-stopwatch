@@ -17,10 +17,10 @@ export function courseInput(input: Record<string, unknown>) {
  return {name,nameKey:name.toLowerCase(),link,type:type as ActivityType};
 }
 
-export async function listActivities(db:D1Database,owner:string):Promise<Activity[]> {
+export async function listActivities(db:D1Database,owner:string,knownAreas?:Awaited<ReturnType<typeof listAreas>>):Promise<Activity[]> {
  const rows=await db.prepare('SELECT c.id,c.name,c.link,c.type,c.status,c.area_id AS areaId,c.revision,a.name AS areaName FROM courses c LEFT JOIN learning_areas a ON a.owner=c.owner AND a.id=c.area_id WHERE c.owner = ? ORDER BY c.created_at ASC,c.id ASC').bind(owner).all<Activity&{id:string}>();
  const saved=rows.results.map(c=>({...c,recordId:c.id,id:activities.find(a=>c.id===a.id+':'+owner)?.id??c.id,short:c.name,description:c.type,areaId:c.areaId??unassignedArea.id,areaName:c.areaName??'Unassigned'}));
- const areas=await listAreas(db,owner);
+ const areas=knownAreas??await listAreas(db,owner);
  return [...activities.flatMap<Activity>(a=>{const found=saved.find(c=>c.id===a.id);if(found)return [found];if(saved.some(c=>c.name.toLowerCase()===a.name.toLowerCase()))return [];const areaId=initialAreaId(a.name,a.id);return [{...a,recordId:a.id+':'+owner,areaId,areaName:areas.find(x=>x.id===areaId)?.name??'Unassigned',revision:0}];}),...saved.filter(c=>!activities.some(a=>a.id===c.id))];
 }
 

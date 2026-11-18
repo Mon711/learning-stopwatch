@@ -2,7 +2,10 @@ import { d1 } from './database';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync,readdirSync } from 'node:fs';
+import { readFileSync,readdirSync,mkdtempSync,mkdirSync,writeFileSync,rmSync } from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { InstantTimer,TimerSaveError,type TimerCommand,type TimerSnapshot } from '../lib/instant-timer';
 import { handleSessionRead,handleSessionWrite } from '../lib/session-api';
@@ -210,4 +213,73 @@ test('database totals include all dates, manual and custom sessions and reflect 
   assert.equal((await read('owner-b')).data.elapsedMs,0);
   assert.equal((await read(null)).status,401);
  } finally {f.close();}
+});
+
+
+test('compact save acknowledgement does not read full history and old committed retries remain valid',async()=>{
+ const f=fixture();try{
+  const db=d1(f.sqlite,sql=>{if(sql.startsWith('SELECT s.*'))throw new Error('History unavailable');});
+  const id=randomUUID(),operation_id=randomUUID();
+  const input={action:'start',id,operation_id,activity:'Scrimba Full Stack',at_ms:base,response_mode:'ack'};
+  const call=async(now:number)=>handleSessionWrite(new Request('https://stopwatch.test/api/sessions',{method:'POST',body:JSON.stringify(input)}),'owner-a',()=>db,now);
+  const first=await call(base);assert.equal(first.status,200);assert.equal((await first.json() as {saved:boolean}).saved,true);
+  assert.equal((await call(base+86400001)).status,200);
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM sessions').get()!.n,1);
+ }finally{f.close();}
+});
+
+test('a repeated manual ID with changed fields cannot silently succeed',async()=>{
+ const f=fixture();try{
+  const input={action:'manual',id:randomUUID(),activity:'Scrimba Full Stack',start:'2026-10-05T20:00',end:'2026-10-05T20:30',what:'Original'};
+  assert.equal((await f.write(input)).status,200);
+  assert.equal((await f.write(input)).status,200);
+  assert.equal((await f.write({...input,what:'Changed'})).status,409);
+  assert.equal(f.sqlite.prepare('SELECT what FROM sessions WHERE id=?').get(input.id)!.what,'Original');
+ }finally{f.close();}
+});
+
+test('persistent timer recovery retains original stop time and note through a new instance',async()=>{
+ const f=fixture();try{
+  let stored:ReturnType<InstantTimer['recovery']>|undefined;
+  const q=new InstantTimer(async()=>{throw new Error('Offline');},()=>{});
+  q.configureRecovery(value=>{stored=JSON.parse(JSON.stringify(value));});
+  void q.enqueue('start','Scrimba Full Stack','',base,randomUUID(),randomUUID());
+  void q.enqueue('stop','Scrimba Full Stack','Recovery note',base+3000,randomUUID(),randomUUID());
+  await turn();assert.equal(stored!.commands.length,2);
+  const restored=new InstantTimer(f.send,()=>{});
+  restored.configureRecovery(value=>{stored=value;},stored);
+  restored.retry();for(let i=0;i<20&&restored.count;i++)await turn();
+  assert.equal(restored.count,0);assert.equal(restored.sessions[0].elapsed_ms,3000);
+  assert.equal(restored.sessions[0].what,'Recovery note');assert.equal(stored!.commands.length,0);
+ }finally{f.close();}
+});
+
+
+test('persistent conflicts keep the recovery draft and storage failures do not block saving',async()=>{
+ const q=new InstantTimer(async()=>{throw new TimerSaveError('Changed in another tab',undefined,false);},()=>{});
+ let draft:ReturnType<InstantTimer['recovery']>|undefined;
+ q.configureRecovery(value=>{draft=value;});
+ void q.enqueue('start','Scrimba Full Stack','',base,randomUUID(),randomUUID()).catch(()=>{});
+ await turn();assert.equal(q.count,1);assert.equal(q.retryable,false);assert.equal(draft!.commands.length,1);
+ let kept=false;q.reviewConflict(()=>{kept=true;});assert.equal(kept,true);assert.equal(q.count,0);
+ const f=fixture();try{
+  const available=new InstantTimer(f.send,()=>{});
+  available.configureRecovery(()=>{throw new Error('Storage denied');});
+  await available.enqueue('start','Scrimba Full Stack','',base,randomUUID(),randomUUID());
+  assert.equal(available.count,0);assert.match(available.recoveryWarning,/storage/);
+ }finally{f.close();}
+});
+
+
+test('release asset retention preserves current files and rejects hash-name collisions',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'learning-assets-'));
+ try{
+  const old=join(dir,'old'),current=join(dir,'current');mkdirSync(old);mkdirSync(current);
+  writeFileSync(join(old,'chunk-abcdefgh.js'),'old');writeFileSync(join(current,'chunk-ijklmnop.js'),'current');
+  const run=()=>spawnSync(process.execPath,['scripts/retain-client-assets.mjs',old,current]);
+  assert.equal(run().status,0);assert.equal(readFileSync(join(current,'chunk-abcdefgh.js'),'utf8'),'old');
+  assert.equal(readFileSync(join(current,'chunk-ijklmnop.js'),'utf8'),'current');
+  writeFileSync(join(old,'chunk-ijklmnop.js'),'collision');assert.notEqual(run().status,0);
+  assert.equal(readFileSync(join(current,'chunk-ijklmnop.js'),'utf8'),'current');
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

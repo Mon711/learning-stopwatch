@@ -9,7 +9,8 @@ export async function listGoals(db: D1Database, owner: string): Promise<Goal[]> 
  return rows.results.map(row => ({ ...row, scope: JSON.parse(row.scope), history: JSON.parse(row.history) }));
 }
 export async function readGoals(db: D1Database, owner: string, now = Date.now()) {
- const [goals, activities, areas] = await Promise.all([listGoals(db, owner), listActivities(db, owner), listAreas(db, owner)]);
+ const areas=await listAreas(db,owner);
+ const [goals, activities] = await Promise.all([listGoals(db, owner), listActivities(db, owner,areas)]);
  const sessions = goals.length ? (await db.prepare("SELECT day,activity,activity_id,state,elapsed_ms FROM sessions WHERE owner=? AND state='stopped' AND day>=? AND day<=?").bind(owner, goals.reduce((min, g) => g.startDay < min ? g.startDay : min, goals[0].startDay), goals.reduce((max, g) => g.endDay > max ? g.endDay : max, goals[0].endDay)).all<Session>()).results : [];
  return { goals: goalProgress(goals, sessions, activities), activities, areas, now };
 }

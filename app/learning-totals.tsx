@@ -1,6 +1,7 @@
+import { boundedFetch as fetch } from '@/lib/browser-request';
 import { SelectItem } from '@/components/ui/select';
 import AppSelect from './app-select';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCw,ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { duration, type Session } from '@/lib/stopwatch';
@@ -11,11 +12,12 @@ import type { Activity } from '@/lib/stopwatch';
 import type { learningTotals } from '@/lib/learning-totals';
 type Totals = ReturnType<typeof learningTotals> & { updatedAt: number;activities:Activity[];areas:LearningArea[] };
 
-export default function LearningTotals({ active, pending, savedRevision, ownerName=null }: { ownerName?: string|null; active: Session | null; pending: boolean; savedRevision: number }) {
+function LearningTotals({ visible, active, pending, savedRevision, ownerName=null }: { visible:boolean; ownerName?: string|null; active: Session | null; pending: boolean; savedRevision: number }) {
  const [totals,setTotals]=useState<Totals|null>(null),[refreshing,setRefreshing]=useState(false),[error,setError]=useState('');
  const [groupBy,setGroupBy]=useState('area'),[filters,setFilters]=useState({...emptyFilters});
  const request=useRef<AbortController|null>(null);
  const refresh=useCallback(async()=>{
+  if(request.current&&!request.current.signal.aborted)return;
   request.current?.abort();const controller=new AbortController();request.current=controller;setRefreshing(true);
   try {
    const response=await fetch('/api/totals',{cache:'no-store',signal:controller.signal});
@@ -23,9 +25,9 @@ export default function LearningTotals({ active, pending, savedRevision, ownerNa
    if(!response.ok)throw new Error(data.error||'Could not load totals. Please retry.');
    if(!controller.signal.aborted){setTotals(data as Totals);setError('');}
   } catch(e) {if(!controller.signal.aborted)setError(e instanceof Error?e.message:'Could not load totals. Please retry.');}
-  finally {if(request.current===controller&&!controller.signal.aborted)setRefreshing(false);}
+  finally {if(request.current===controller&&!controller.signal.aborted)setRefreshing(false);if(request.current===controller)request.current=null;}
  },[]);
- useEffect(()=>{void refresh();return()=>request.current?.abort();},[savedRevision,refresh]);
+ useEffect(()=>{if(!visible)return;void refresh();return()=>request.current?.abort();},[visible,savedRevision,refresh]);
  const count = (n: number) => `${n} ${n === 1 ? 'session' : 'sessions'}`;
  const ready = !!totals && !error;
  const filtered=Object.values(filters).some(Boolean);
@@ -55,3 +57,5 @@ export default function LearningTotals({ active, pending, savedRevision, ownerNa
   {active && <p className="totals-active" role="status">{ownerName?`${ownerName}’s`:"Your"} {active.activity} session is {active.state === 'running' ? 'still running' : 'paused'}. Its time will join these totals when {ownerName?"the learner stops and saves":"you stop and save"} it. <a href="#stopwatch">{ownerName?"View current timer →":"Return to stopwatch →"}</a></p>}
  </section>;
 }
+
+export default memo(LearningTotals);
