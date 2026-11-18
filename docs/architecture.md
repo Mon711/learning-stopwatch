@@ -176,7 +176,7 @@ source plus the local changes and a frozen install of existing dependencies outs
 iCloud. Keep tests strict. The older starter pnpm shell installer also assumes
 Linux tools; portable setup uses direct frozen pnpm, not extra GNU installations.
 
-## Local reliability repair (not published)
+## Reliability repair (Version 18)
 
 The page passes only the authenticated writable owner's ID as the recovery namespace.
 InstantTimer persists its pending commands and the necessary confirmed session rows

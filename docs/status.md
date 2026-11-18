@@ -1,3 +1,31 @@
+# Reliability repair is live — Version 18
+
+18 November 2026. Explicitly approved GitHub and Sites publication completed.
+GitHub main implementation commit: 6516fde2c6ae9adc2245b1a6b47591cf37811d1b.
+Sites runtime source: 605b2c42438d5a1cfefea60203e2547151699849.
+Both have source tree 9989445d80fc2b089aac8f0285691bb6e17140a7.
+Deployment appgdep_6afd871d5a7c8191882aacf56f0250c2 succeeded with MCP and the
+existing access configuration preserved. No schema migration was added.
+
+TypeScript, 54 tests, fresh production build and delegated synthetic browser QA
+passed. Two matching read-only backup passes restored every field and passed SQLite
+integrity_check. Post-release reads matched all original fields: 61 sessions,
+7 activities, 5 areas and 1 goal. No production record was written by release QA.
+Private backup: sibling local-backups/2026-11-18/reliability-release/.
+
+The live host returned HTTP 200 and exact expected SHA-256 hashes for both the
+retained Version 17 and new Version 18 stopwatch JavaScript chunks. This resolves
+the local release's retained-asset verification blocker; it does not prove global
+propagation at every location. Existing already-open legacy tabs should save their
+pending work before reloading to receive the new recovery code. The underlying
+prior D1 service failure remains unattributed. Release evidence is in sibling
+review-artifacts/2026-11-18-reliability-implementation/RELEASE.json.
+
+The following is the historical local implementation record, superseded by the
+verified release above.
+
+---
+
 # Local reliability repair — 18 November 2026
 
 Local implementation only, uncommitted and not pushed or published. Production
