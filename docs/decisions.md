@@ -92,7 +92,7 @@ Recurrence, reminders, Activity Type targets, nested rules and streaks are defer
 
 ## 009 — Local reliability recovery
 
-18 November 2026, implementation for local review only. Preserve original timer
+18 November 2026, published as Version 18 after explicit approval. Preserve original timer
 commands in owner-scoped browser journals and use existing operation IDs/revisions
 for safe recovery. Compact opt-in write acknowledgements preserve old-client
 compatibility. Keep full history/CSV semantics, avoid dependencies/schema changes,

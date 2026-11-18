@@ -191,10 +191,10 @@ are separate from deployments and must not be assumed to migrate production.
 Never commit personal time logs, backups, databases, environment files, tokens or
 screenshots containing real records. Test fixtures must contain invented data.
 
-## Local reliability changes awaiting review
+## Reliability repair — Version 18
 
-The local checkout includes recovery for interrupted timer saves, request deadlines,
-and reduced background report work. These changes are not yet live. See docs/status.md
+Version 18 includes recovery for interrupted timer saves, request deadlines,
+and reduced background report work. These changes are live. See docs/status.md
 for verification and release limits. Recovery copies belong to this browser/account;
 clearing browser storage removes them. If a conflict appears, download/review the
 recovery details before choosing to load newer saved records. An older unsent action
