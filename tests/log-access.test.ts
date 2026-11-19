@@ -21,6 +21,11 @@ test('only the verified invited email resolves to the learner; other identities 
   assert.equal(resolveLogAccess(null, grant), null);
   assert.equal(resolveLogAccess({ userId: '', email: mentor.email }, grant), null);
   assert.equal(resolveLogAccess(mentor, { viewerEmail: grant.viewerEmail }), null);
+  const multiple = { ...grant, viewerEmail: 'mentor@example.test, SECOND@example.test, ' };
+  assert.equal(resolveLogAccess(mentor, multiple)?.readOnly, true);
+  assert.deepEqual(resolveLogAccess({ userId: 'second', email: 'second@example.test' }, multiple), { ownerId: grant.ownerId, readOnly: true, ownerName: grant.ownerName });
+  assert.equal(resolveLogAccess({ userId: 'stranger', email: 'second@example.test.evil' }, multiple)?.ownerId, 'stranger');
+  assert.equal(resolveLogAccess({ userId: 'second', email: 'second@example.test' }, { viewerEmail: multiple.viewerEmail }), null);
   // Removing the grant removes access to the learner's records.
   assert.equal(resolveLogAccess(mentor, {})?.ownerId, mentor.userId);
 });

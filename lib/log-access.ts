@@ -10,7 +10,7 @@ export type LogSharing = {
 // viewer email or a target owner from a URL, request body, or MCP arguments.
 export function resolveLogAccess(user: LogIdentity | null, sharing: LogSharing): LogAccess | null {
   if (!user?.userId || !user.email) return null;
-  if (sharing.viewerEmail?.trim().toLowerCase() === user.email.trim().toLowerCase()) {
+  if (sharing.viewerEmail?.split(',').some(email => email.trim().toLowerCase() === user.email.trim().toLowerCase())) {
     // An incomplete grant fails closed, including for write requests.
     if (!sharing.ownerId?.trim()) return null;
     return { ownerId: sharing.ownerId.trim(), readOnly: true, ownerName: sharing.ownerName?.trim() || 'Shared learner' };

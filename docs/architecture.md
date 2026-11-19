@@ -135,7 +135,8 @@ choose an owner. withLogWriteAccess rejects mentor writes before database access
 UI hiding supplements these server checks. Origin/input checks cover area writes.
 
 Mentor settings remain Sites secrets only: LEARNING_SHARED_OWNER_ID (the existing
-learner Site-scoped ID), LEARNING_SHARED_VIEWER_EMAIL and LEARNING_SHARED_OWNER_NAME.
+learner Site-scoped ID), LEARNING_SHARED_VIEWER_EMAIL (one email or a comma-separated list of exact reader
+addresses) and LEARNING_SHARED_OWNER_NAME.
 No records are copied. Authorized revocation removes the Site invitation and
 sharing configuration; already exported records cannot be retracted. Plugin
 installation in another account is separate from Site access.
