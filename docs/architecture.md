@@ -109,7 +109,9 @@ concurrently created/edited goal references. Users edit goal scopes explicitly
 before removal; automatic scope expansion to a destination area was rejected.
 Other goals and every session survive goal deletion. Goal JSON backup exports
 settings/history and derived results with a result timestamp; it is separate from
-session CSV and does not implement import. Existing MCP tools are unchanged.
+session CSV and does not implement import. The MCP goal reader reuses readGoals,
+goalPeriod and scopeDescription, keeping saved results and current labels aligned
+with the website rather than maintaining another progress calculation.
 
 For a fresh isolated preview only, build to generate dist/server/wrangler.json,
 apply earlier migrations as described in README, then apply the pending Goals
@@ -138,10 +140,28 @@ No records are copied. Authorized revocation removes the Site invitation and
 sharing configuration; already exported records cannot be retracted. Plugin
 installation in another account is separate from Site access.
 
-MCP discovery exposes no private records. All three tools remain read-only.
-Session filters apply before the 500-result cap and retain the existing date
-default. Area name/ID resolution is owner-scoped. All-time activity/area summaries
-include preserved inactive history. Additive metadata retains older response fields.
+MCP discovery exposes no private records. All five tools remain read-only.
+Session filters apply before the 500-row page limit and retain the existing today
+default. Inclusive start_date/end_date and all_dates=true are alternative date
+modes. next_offset permits complete history retrieval; totals_scope=page prevents
+confusing a page total with a complete report. Offset paging is not a frozen
+snapshot: callers must restart/reconcile IDs if records change while paging.
+Area name/ID resolution is owner-scoped. All-time activity/area summaries include
+preserved inactive history. Additive metadata retains older response fields.
+
+get_learning_goals derives current/upcoming/past and the website's target-reached,
+period-complete, upcoming or in-progress status at the returned as_of timestamp.
+It includes exact saved progress, scope IDs/current descriptions and dated
+before/after definition history. get_learning_totals reuses learningTotals and
+filterSessions for complete reports, all three groupings and status splits.
+Its in_progress_sessions ignores report dates (while respecting classification
+filters), so a saved overnight timer remains visible. Neither reader initializes
+areas, writes data, accepts an owner override or bypasses getLogAccess.
+
+Saved session and goal data cover the existing CSV/JSON exports. Browser-only
+theme, unsaved drafts and recovery journals cannot be read by the server. Deleted
+records cannot be reconstructed. Publishing refreshes the existing Sites plugin's
+tool catalogue; the mentor must still connect their own authorized account.
 
 ## Migration safety
 

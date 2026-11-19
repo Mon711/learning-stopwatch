@@ -3,6 +3,18 @@
 Git tracks individual changes. Record consequential choices, rationale and status
 here; explicitly supersede a decision when changing its semantics.
 
+## 010 — Complete saved-data access for MCP-only mentors
+
+19 November 2026, implementation and publication authorized by the user.
+The user requires a mentor to read all Learning Stopwatch information through the
+plugin without using the website. Add goal details/progress/history and complete
+reports using the existing website services; extend session reads with date ranges,
+all-date history and explicit continuation past 500 rows. Retain today's default,
+existing fields, current-classification semantics and owner/mentor restrictions.
+All tools stay read-only. CSV/goal backup information is exposed as structured data,
+without adding download or write tools. Browser-only preferences and unsaved drafts
+remain on the owner's device. No schema changes or dependencies are needed.
+
 ## 001 — Independent classifications
 
 Accepted, 17 November 2026. One user-managed Learning Area describes the subject;

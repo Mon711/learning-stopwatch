@@ -1,3 +1,34 @@
+# Complete MCP read coverage — approved for publication
+
+19 November 2026. Publication authorized by the user; release in progress. Production remains
+Version 18 with three MCP tools. The extension adds get_learning_goals (definitions,
+all periods/statuses, exact progress, labels, timestamps and full edit history) and
+get_learning_totals (all-time/range reports, three groupings, filters, inactive
+splits and saved current timers across dates). Session reads now support inclusive
+ranges, full history and next_offset beyond the existing 500-row page size.
+Existing daily defaults, response fields and owner/mentor rules are preserved.
+Browser-only drafts/preferences and actually deleted records remain unavailable.
+No new dependencies, schema migrations, access grants or MCP writes.
+
+Verification: TypeScript, all 58 automated tests and an isolated production build
+pass. New checks cover goal/UI service parity, mentor ownership/read-only behavior,
+precise totals, retained inactive history, overnight timers, malformed arguments
+and complete pagination. Delegated synthetic Chrome browser QA passed: goal
+periods/status/progress/edit details, all report groupings and archived history,
+the overnight paused timer, history notes/IDs and daily defaults matched MCP.
+All five tools returned the synthetic shared learner/read-only markers without
+another owner's private records. Evidence/report:
+sibling review-artifacts/2026-11-19-mcp/VERIFICATION.md. No screenshots were saved.
+Preview: /private/tmp/learning-stopwatch-mcp-qa, backend 127.0.0.1:5201,
+browser localhost:5202 (servers stopped after QA). All preview records and mentor
+settings are invented. Checks used Node 22.20.0 and matching existing frozen-lock
+dependencies in an isolated resident copy because direct checkout checks stalled
+on dependency reads. Runtime/test source equality was checked after verification.
+Karan is listed as a live Site viewer and sharing-secret keys are present, but
+their values are redacted and his actual signed-in plugin connection is untested.
+
+---
+
 # Reliability repair is live — Version 18
 
 18 November 2026. Explicitly approved GitHub and Sites publication completed.

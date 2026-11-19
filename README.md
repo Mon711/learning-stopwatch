@@ -172,15 +172,44 @@ POST /mcp exposes only read tools:
 
 - get_learning_sessions: existing date/activity/include_in_progress arguments plus
   learning_area (name or stable ID) and activity_type. Filters combine with AND.
-  Omitted date still means today in Asia/Kolkata.
+  Omitted date still means today in Asia/Kolkata. Use start_date/end_date for an
+  inclusive date range, or all_dates=true for complete saved history. These date
+  modes cannot be combined. Follow next_offset until null; each page has at most
+  500 sessions, and its completed totals cover that page only. Keep filters the
+  same on subsequent pages. If records change while paging, restart and reconcile
+  by session ID. Exact duration_ms and current activity_status are also returned.
 - get_learning_activities: all-time activity totals; optional status, activity,
   learning_area and activity_type filters, including retained inactive records.
 - get_learning_areas: area IDs and all-time totals with active/inactive time splits.
+- get_learning_goals: all saved current/upcoming/past goal definitions, resolved
+  scope labels, exact target/progress, percentage, remaining/over-target minutes,
+  status, timestamps and full definition edit history. Optional goal name/ID,
+  period and target_reached filters. Past results stay live, matching the website.
+- get_learning_totals: complete all-time or inclusive start_date/end_date reports,
+  with Area/Type/activity/status filters and all three groupings, exact durations
+  and active/inactive splits. Also returns matching saved running/paused timers
+  across all dates, even when the report range excludes their start date.
 
 For example, session tool arguments with learning_area AI Engineering, activity_type
 Course and date 2026-11-17 retrieve that combination for that date. Use the activity
 or area tools for all-time totals. New metadata is additive; callers cannot choose
 an owner or write through MCP. Mentor reads use the same resolved learner.
+
+The five tools cover the saved information behind Stopwatch, History, Learning
+Totals, Goals and activity/area management. Session history supplies the data
+behind the CSV export; goal reads include definitions/history/results corresponding
+to the goal JSON backup. MCP returns data rather than clicking download buttons.
+Theme preferences, unsaved notes/forms and timer recovery journals live only in
+the owner's browser and are not server records. Explicitly deleted sessions/goals
+cannot be recovered through MCP. Existing read-only mentor access is unchanged.
+
+A mentor can ask the connected plugin: “Show all my learner's current, past and
+upcoming goals with progress and changes”, “What is their current saved timer?”,
+or “Summarize their learning by area and activity type for this month.” Shared
+results identify the learner in data_owner and include access=read_only.
+Installation/sign-in with the mentor's authorized account is still required;
+another person's account connection cannot be verified from the owner's chat.
+The MCP extension described here is local until the release recorded in Status.
 
 ## Publication
 

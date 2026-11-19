@@ -5,6 +5,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync,readdirSync } from 'node:fs';
 import { addCourse,courseInput,listActivities } from '../lib/courses';
 import { handleLearningMcp } from '../lib/learning-mcp';
+import { readGoals, writeGoal } from '../lib/goals-store';
+import { ensureAreas, initialAreas } from '../lib/learning-areas';
+import { activities } from '../lib/stopwatch';
 
 const now = Date.parse('2026-10-03T20:30:00Z'); // 4 Oct, 02:00 IST.
 type RpcReply = {
@@ -17,10 +20,19 @@ type RpcReply = {
       sessions: { id: string; state: string; duration_minutes: number; what_i_did: string; optional_notes: string }[];
       total_completed_minutes: number;
       completed_session_count: number;
+      total_completed_ms: number;
+      next_offset: number | null;
+      access: string;
+      data_owner: string;
+      in_progress_sessions: { id: string; state: string; duration_ms: number }[];
+      by_learning_area: { id: string; total_completed_ms: number; inactive_minutes: number }[];
+      by_activity_type: { type: string; total_completed_ms: number }[];
+      by_activity: { id: string; status: string; total_completed_ms: number }[];
+      goals: { id: string; name: string; completed_ms: number; target_ms: number; period: string; status: string; progress_percent: number; remaining_minutes: number; over_target_minutes: number; scope_description: string; edit_history: { at: string; changes: { field: string; from: string; to: string }[] }[] }[];
     };
   };
 };
-function fixture(owner: string | null = 'owner-a') {
+function fixture(owner: string | null = 'owner-a', readOnly = false) {
   const sqlite = new DatabaseSync(':memory:');
   for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync('drizzle/'+f,'utf8'));
   const insert = sqlite.prepare('INSERT INTO sessions (id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,resumed_at,version,what) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)');
@@ -35,7 +47,7 @@ function fixture(owner: string | null = 'owner-a') {
     const response = await handleLearningMcp(new Request('https://stopwatch.test/mcp', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
       body: JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, params }),
-    }), { access: async () => owner ? { ownerId: owner, readOnly: false, ownerName: null } : null, database: () => db, now: () => now });
+    }), { access: async () => owner ? { ownerId: owner, readOnly, ownerName: readOnly ? 'Shared learner' : null } : null, database: () => db, now: () => now });
     return { status: response.status, body: await response.json() as RpcReply };
   };
   return { send,db,sqlite, queries: () => queries,historyQueries:()=>queried.filter(sql=>/FROM sessions/i.test(sql)).length, close: () => sqlite.close() };
@@ -66,14 +78,14 @@ test('course names and links are validated before saving',()=>{
  assert.equal(courseInput({name:'Course'}).link,'');
 });
 
-test('discovery exposes only a read-only tool and no private records', async () => {
+test('discovery exposes all five read-only tools and no private records', async () => {
   const f = fixture(null);
   try {
     const init = await f.send('initialize', { protocolVersion: '2025-03-26' });
     assert.equal(init.body.result.protocolVersion, '2025-03-26');
     const list = await f.send('tools/list');
-    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities','get_learning_areas']);
-    assert.equal(list.body.result.tools[0].annotations.readOnlyHint, true);
+    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities','get_learning_areas','get_learning_goals','get_learning_totals']);
+    assert.ok(list.body.result.tools.every(t => t.annotations.readOnlyHint));
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
 });
@@ -81,7 +93,7 @@ test('discovery exposes only a read-only tool and no private records', async () 
 test('anonymous tool calls never read the database', async () => {
   const f = fixture(null);
   try {
-    for(const name of ['get_learning_sessions','get_learning_activities','get_learning_areas']){const r=await f.send('tools/call',{name});assert.equal(r.status,401);}
+    for(const name of ['get_learning_sessions','get_learning_activities','get_learning_areas','get_learning_goals','get_learning_totals']){const r=await f.send('tools/call',{name});assert.equal(r.status,401);}
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
 });
@@ -133,6 +145,125 @@ test('cross-origin requests are rejected before any data access', async () => {
   try {
     const r = await f.send('tools/call', { name: 'get_learning_sessions' }, 1, 'https://other.test');
     assert.equal(r.status, 403);
+    assert.equal(f.queries(), 0);
+  } finally { f.close(); }
+});
+
+test('mentor goal reads match website progress, include all periods and edit history, and never write', async () => {
+  const f = fixture('owner-a', true);
+  try {
+    const definitions = [
+      { id: '20000000-0000-4000-8000-000000000001', name: 'Today', startDay: '2026-10-04', endDay: '2026-10-04', targetMs: 30 * 60000, scope: { kind: 'all' } },
+      { id: '20000000-0000-4000-8000-000000000002', name: 'Past reached', startDay: '2026-10-03', endDay: '2026-10-03', targetMs: 60 * 60000, scope: { kind: 'all' } },
+      { id: '20000000-0000-4000-8000-000000000003', name: 'Past missed', startDay: '2026-10-03', endDay: '2026-10-03', targetMs: 60 * 60000, scope: { kind: 'areas', areaIds: [initialAreas[0].id] } },
+      { id: '20000000-0000-4000-8000-000000000004', name: 'Future', startDay: '2026-10-05', endDay: '2026-10-06', targetMs: 60 * 60000, scope: { kind: 'activity', activityId: activities[2].id } },
+    ];
+    for (const goal of definitions) await writeGoal(f.db, 'owner-a', { ...goal, action: 'create' }, now - 1000);
+    await writeGoal(f.db, 'owner-a', { ...definitions[0], name: 'Today renamed', action: 'edit', revision: 0 }, now);
+    await writeGoal(f.db, 'owner-b', { ...definitions[0], name: 'PRIVATE OTHER GOAL', action: 'create' }, now);
+    f.sqlite.prepare("UPDATE sessions SET elapsed_ms=900123 WHERE id='completed-a'").run();
+    const before = f.sqlite.prepare('SELECT total_changes() AS n').get()!.n;
+    const website = await readGoals(f.db, 'owner-a', now);
+    const data = (await f.send('tools/call', { name: 'get_learning_goals' })).body.result.structuredContent;
+    assert.equal(data.access, 'read_only');
+    assert.equal(data.data_owner, 'Shared learner');
+    assert.equal(data.goals.length, 4);
+    for (const goal of data.goals) assert.equal(goal.completed_ms, website.goals.find(g => g.id === goal.id)!.completedMs);
+    const current = data.goals.find(g => g.id === definitions[0].id)!;
+    assert.equal(current.period, 'current');
+    assert.equal(current.status, 'target_reached');
+    assert.equal(current.completed_ms, 2100123);
+    assert.ok(current.progress_percent > 100);
+    assert.equal(current.remaining_minutes, 0);
+    assert.equal(current.over_target_minutes, 300123 / 60000);
+    assert.deepEqual(current.edit_history, [{ at: new Date(now).toISOString(), changes: [{ field: 'Name', from: 'Today', to: 'Today renamed' }] }]);
+    assert.equal(data.goals.find(g => g.name === 'Past missed')!.status, 'period_complete');
+    assert.equal(data.goals.find(g => g.name === 'Future')!.status, 'upcoming');
+    assert.match(data.goals.find(g => g.name === 'Future')!.scope_description, /Exercism/);
+    const filtered = (await f.send('tools/call', { name: 'get_learning_goals', arguments: { period: 'past', target_reached: true } })).body.result.structuredContent;
+    assert.deepEqual(filtered.goals.map(g => g.name), ['Past reached']);
+    assert.equal((await f.send('tools/call', { name: 'get_learning_goals', arguments: { goal: current.id } })).body.result.structuredContent.goals[0].name, current.name);
+    assert.equal(JSON.stringify(data).includes('PRIVATE OTHER'), false);
+    assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get()!.n, before);
+  } finally { f.close(); }
+});
+
+test('reports reconcile exact totals, classifications and retained inactive history; timers span midnight', async () => {
+  const f = fixture('owner-a', true);
+  try {
+    await ensureAreas(f.db, 'owner-a');
+    f.sqlite.prepare("UPDATE courses SET status='archived',type='Project' WHERE owner='owner-a' AND name='Ed Donner AI Engineering'").run();
+    f.sqlite.prepare("UPDATE sessions SET day='2026-10-02',state='paused',resumed_at=NULL WHERE id='running-a'").run();
+    const before = f.sqlite.prepare('SELECT total_changes() AS n').get()!.n;
+    const data = (await f.send('tools/call', { name: 'get_learning_totals', arguments: { start_date: '2026-10-04', end_date: '2026-10-04' } })).body.result.structuredContent;
+    assert.equal(data.access, 'read_only');
+    assert.equal(data.total_completed_ms, 2100000);
+    assert.equal(data.total_completed_minutes, 35);
+    assert.equal(data.completed_session_count, 2);
+    assert.equal(data.by_learning_area.reduce((n, a) => n + a.total_completed_ms, 0), data.total_completed_ms);
+    assert.equal(data.by_activity_type.reduce((n, a) => n + a.total_completed_ms, 0), data.total_completed_ms);
+    assert.equal(data.by_activity.reduce((n, a) => n + a.total_completed_ms, 0), data.total_completed_ms);
+    assert.equal(data.by_learning_area.find(a => a.id === initialAreas[0].id)!.inactive_minutes, 20);
+    assert.equal(data.by_activity_type.find(a => a.type === 'Project')!.total_completed_ms, 1200000);
+    assert.deepEqual(data.in_progress_sessions.map(s => [s.id, s.state, s.duration_ms]), [['running-a', 'paused', 60000]]);
+    const filtered = (await f.send('tools/call', { name: 'get_learning_totals', arguments: { start_date: '2026-10-04', end_date: '2026-10-04', learning_area: 'AI Engineering', activity_type: 'Project', activity: activities[1].id, status: 'archived' } })).body.result.structuredContent;
+    assert.equal(filtered.total_completed_minutes, 20);
+    assert.equal(filtered.in_progress_sessions.length, 0);
+    assert.equal(filtered.by_activity.length, 1);
+    const empty = (await f.send('tools/call', { name: 'get_learning_totals', arguments: { learning_area: 'Music' } })).body.result.structuredContent;
+    assert.equal(empty.total_completed_ms, 0);
+    assert.equal(empty.in_progress_sessions.length, 0);
+    // An activity move must regroup old sessions without changing their timing.
+    f.sqlite.prepare("UPDATE courses SET area_id=?,status='deleted' WHERE owner='owner-a' AND name='Ed Donner AI Engineering'").run(initialAreas[1].id);
+    const moved = (await f.send('tools/call', { name: 'get_learning_totals', arguments: { start_date: '2026-10-04', end_date: '2026-10-04' } })).body.result.structuredContent;
+    assert.equal(moved.total_completed_ms, data.total_completed_ms);
+    assert.equal(moved.by_learning_area.find(a => a.id === initialAreas[1].id)!.total_completed_ms, 2100000);
+    assert.equal(JSON.stringify(moved).includes('PRIVATE OTHER'), false);
+    // Only the explicit fixture update above changed the database.
+    assert.equal(Number(f.sqlite.prepare('SELECT total_changes() AS n').get()!.n), Number(before) + 1);
+  } finally { f.close(); }
+});
+
+test('full history pages past 500 records without loss; inclusive range and filters retain old defaults', async () => {
+  const f = fixture();
+  try {
+    const insert = f.sqlite.prepare("INSERT INTO sessions(id,owner,activity,state,started_at,stopped_at,day,elapsed_ms,version,what) VALUES (?,'owner-a','Exercism JavaScript','stopped',?,?,'2026-10-04',60001,0,'Paged note')");
+    for (let i = 0; i < 501; i++) insert.run('paged-' + String(i).padStart(3, '0'), now - 60000, now);
+    const expected = f.sqlite.prepare("SELECT id FROM sessions WHERE owner='owner-a' AND state='stopped' ORDER BY started_at,id").all().map(s => s.id);
+    const first = (await f.send('tools/call', { name: 'get_learning_sessions', arguments: { all_dates: true } })).body.result.structuredContent;
+    assert.equal(first.sessions.length, 500);
+    assert.equal(first.next_offset, 500);
+    const last = (await f.send('tools/call', { name: 'get_learning_sessions', arguments: { all_dates: true, offset: first.next_offset } })).body.result.structuredContent;
+    assert.equal(last.next_offset, null);
+    assert.deepEqual([...first.sessions, ...last.sessions].map(s => s.id), expected);
+    const totals = (await f.send('tools/call', { name: 'get_learning_totals' })).body.result.structuredContent;
+    assert.equal(totals.completed_session_count, expected.length);
+    const range = (await f.send('tools/call', { name: 'get_learning_sessions', arguments: { start_date: '2026-10-03', end_date: '2026-10-03', activity: 'Exercism JavaScript' } })).body.result.structuredContent;
+    assert.deepEqual(range.sessions.map(s => s.id), ['other-day']);
+    assert.equal(range.next_offset, null);
+    const today = (await f.send('tools/call', { name: 'get_learning_sessions' })).body.result.structuredContent;
+    assert.equal(today.date, '2026-10-04');
+    assert.ok(!today.sessions.some(s => s.id === 'other-day' || s.id === 'running-a'));
+  } finally { f.close(); }
+});
+
+test('new tools reject owner overrides and malformed ranges/filters before database access', async () => {
+  const f = fixture();
+  try {
+    for (const name of ['get_learning_sessions', 'get_learning_activities', 'get_learning_areas', 'get_learning_goals', 'get_learning_totals']) {
+      assert.equal((await f.send('tools/call', { name, arguments: { owner: 'owner-b' } })).body.error.code, -32602);
+    }
+    for (const name of ['get_learning_sessions', 'get_learning_totals']) {
+      for (const args of [{ start_date: '2026-10-03' }, { start_date: '2026-02-30', end_date: '2026-03-01' }, { start_date: '2026-10-04', end_date: '2026-10-03' }]) {
+        assert.equal((await f.send('tools/call', { name, arguments: args })).body.error.code, -32602);
+      }
+    }
+    for (const args of [{ offset: -1 }, { offset: 0.5 }, { offset: '500' }, { all_dates: 'true' }, { all_dates: true, date: '2026-10-03' }, { date: '2026-10-03', start_date: '2026-10-03', end_date: '2026-10-04' }]) {
+      assert.equal((await f.send('tools/call', { name: 'get_learning_sessions', arguments: args })).body.error.code, -32602);
+    }
+    for (const args of [{ period: ['current'] }, { period: 'future' }, { target_reached: 'true' }, { goal: '' }]) {
+      assert.equal((await f.send('tools/call', { name: 'get_learning_goals', arguments: args })).body.error.code, -32602);
+    }
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
 });
