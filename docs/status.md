@@ -1,7 +1,9 @@
-# Complete MCP read coverage — approved for publication
+# Complete MCP read coverage is live — Version 19
 
-19 November 2026. Publication authorized by the user; release in progress. Production remains
-Version 18 with three MCP tools. The extension adds get_learning_goals (definitions,
+19 November 2026. User-authorized publication completed as Sites Version 19.
+Runtime source: 5fc7cda631d6913fcda553d02b23ccfc43d60289. Deployment
+appgdep_6aff1194b1548191af1241e990da27d7 succeeded with MCP.
+The release adds get_learning_goals (definitions,
 all periods/statuses, exact progress, labels, timestamps and full edit history) and
 get_learning_totals (all-time/range reports, three groupings, filters, inactive
 splits and saved current timers across dates). Session reads now support inclusive
@@ -9,6 +11,18 @@ ranges, full history and next_offset beyond the existing 500-row page size.
 Existing daily defaults, response fields and owner/mentor rules are preserved.
 Browser-only drafts/preferences and actually deleted records remain unavailable.
 No new dependencies, schema migrations, access grants or MCP writes.
+
+Two fresh read-only backup passes matched. The private JSON checksum and complete
+SQLite restore passed integrity_check. Post-release full-field reads matched all
+63 sessions, 7 activities, 5 areas and 1 goal, totaling 95,576,802 saved milliseconds;
+no open timers were present. Existing Site audience and mentor settings were
+preserved. Backup: sibling local-backups/2026-11-19/mcp-release/.
+The live native session reader accepted all_dates=true and returned all 63 rows.
+Live activity/area reads passed. The current and retained stopwatch assets returned
+HTTP 200 with exact packaged hashes. This chat retains the pre-release three-tool
+catalogue, so new goal/report tool calls were verified locally rather than through
+this chat after deployment. A fresh chat may be needed to discover the new tools.
+Release evidence is beside VERIFICATION.md as RELEASE.json and LIVE-ASSETS.json.
 
 Verification: TypeScript, all 58 automated tests and an isolated production build
 pass. New checks cover goal/UI service parity, mentor ownership/read-only behavior,

@@ -209,7 +209,8 @@ or “Summarize their learning by area and activity type for this month.” Shar
 results identify the learner in data_owner and include access=read_only.
 Installation/sign-in with the mentor's authorized account is still required;
 another person's account connection cannot be verified from the owner's chat.
-The MCP extension described here is local until the release recorded in Status.
+Complete MCP read coverage is published as Sites Version 19. A fresh chat may be
+needed to discover the new tools after publication.
 
 ## Publication
 

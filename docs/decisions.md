@@ -5,7 +5,7 @@ here; explicitly supersede a decision when changing its semantics.
 
 ## 010 — Complete saved-data access for MCP-only mentors
 
-19 November 2026, implementation and publication authorized by the user.
+19 November 2026, approved and published as Sites Version 19.
 The user requires a mentor to read all Learning Stopwatch information through the
 plugin without using the website. Add goal details/progress/history and complete
 reports using the existing website services; extend session reads with date ranges,
