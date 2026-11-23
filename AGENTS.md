@@ -14,7 +14,7 @@
 1. Open the existing Site source locally and preserve its project ID and audience.
 2. Implement changes in the local checkout. Use an isolated local database and synthetic records for tests; keep production credentials and data out of local fixtures.
 3. Run the relevant automated tests and production build, then test the changed user journeys in a real local browser. Verify history, totals, CSV and MCP when activity/session behavior changes.
-4. Delegate browser work to a focused subagent. At dispatch time, select a currently available fast, lower-cost model with browser/tool support and medium reasoning (or the nearest supported level). Recheck available models and current official guidance; keep model names out of durable instructions. Give it the local URL, scenarios, expected outcomes and a prohibition on production writes. Require a concise pass/fail report and evidence.
+4. Use Brave for all browser testing. Delegate browser work to a focused subagent. At dispatch time, select a currently available fast, lower-cost model with browser/tool support and medium reasoning (or the nearest supported level). Recheck available models and current official guidance; keep model names out of durable instructions. Give it the local URL, scenarios, expected outcomes and a prohibition on production writes. Require a concise pass/fail report and evidence.
 5. Fix observed failures and rerun affected checks. Passing automated tests AND browser QA are required before pushing source or publishing. If either is unavailable, report the blocker and keep changes local unless the user explicitly changes this requirement.
 6. Push only the tested source state, package that same commit through the Sites workflow, deploy the saved version, and confirm deployment success. Recheck any code changed after validation. Preserve the existing audience.
 
@@ -39,8 +39,10 @@
 - Block area deletion while any current, upcoming or past goal references it;
   users must edit goal scopes explicitly. Keep reference/revision guards inside
   writes so concurrent edits cannot leave dangling scopes or partially move areas.
-- MCP stays read-only with owner-safe activity/area reads. Recurrence, Activity
-  Type goals and Graphify remain deferred. Add no dependencies for these features.
+- MCP permits owner-scoped goal creation, editing and deletion through the existing
+  goal service. Shared viewers remain read-only; all other MCP records stay read-only.
+  Preserve revision/reference guards and retry-safe creation IDs. Recurrence,
+  Activity Type goals and Graphify remain deferred. Add no dependencies for these features.
 
 ## Explanations
 

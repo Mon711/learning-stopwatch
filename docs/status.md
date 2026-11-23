@@ -1,3 +1,28 @@
+# Owner goal writes through MCP — 23 November 2026
+
+Adds create_learning_goal, update_learning_goal and delete_learning_goal for the
+writable owner through the existing goal service. Shared viewers remain read-only;
+other MCP records remain read-only. Complete definitions, stable create UUIDs and
+latest edit/delete revisions preserve website validation, history and safe retries.
+No migrations, dependencies or sharing changes.
+
+TypeScript and all 61 tests pass; production build passes. Delegated native Brave
+QA passed with synthetic local records: create/read progress, target/name update and
+edit history, stale revision rejection, viewer UI/HTTP403 write restrictions, deletion,
+and preservation of the 25-minute session in History and Learning Totals. Optional
+separate website create/edit was not repeated; automated goal API tests still pass.
+A two-pass production logical backup matched all fields and restored exactly to
+SQLite with integrity_check=ok before publication. No production QA writes.
+Release results and private backup are stored outside Git in the Developer folder.
+
+Current source belongs in Developer/learning-stopwatch/.sites-checkout, outside the
+Documents workspace. The Documents checkout had dataless source files and stalled
+on reads. Preserve that original copy; use the Developer checkout for future work.
+Use Brave for browser testing, including native app control when its browser
+extension connection is unavailable. This preference is also saved in user memory.
+
+---
+
 # Complete MCP read coverage is live — Version 19
 
 19 November 2026. User-authorized publication completed as Sites Version 19.

@@ -16,7 +16,7 @@
 | Area validation and atomic reassignment | `lib/learning-areas.ts`, `lib/areas-api.ts` |
 | Session reads/mutations and totals | `lib/session-api.ts`, `lib/totals-api.ts`, `lib/learning-totals.ts` |
 | Shared types, dates, durations, CSV | `lib/stopwatch.ts` |
-| Read-only MCP | `app/mcp/route.ts`, `lib/learning-mcp.ts` |
+| MCP reads and owner goal writes | `app/mcp/route.ts`, `lib/learning-mcp.ts` |
 | Schema, ordered changes, local migration runner | `db/schema.ts`, `drizzle/`, `scripts/migrate-learning-areas.mjs` |
 | Appearance and responsiveness | `app/globals.css`, `app/theme-toggle.tsx`, `lib/theme.ts` |
 
@@ -141,7 +141,7 @@ No records are copied. Authorized revocation removes the Site invitation and
 sharing configuration; already exported records cannot be retracted. Plugin
 installation in another account is separate from Site access.
 
-MCP discovery exposes no private records. All five tools remain read-only.
+MCP discovery exposes no private records. Five reader tools remain read-only.
 Session filters apply before the 500-row page limit and retain the existing today
 default. Inclusive start_date/end_date and all_dates=true are alternative date
 modes. next_offset permits complete history retrieval; totals_scope=page prevents
@@ -163,6 +163,16 @@ Saved session and goal data cover the existing CSV/JSON exports. Browser-only
 theme, unsaved drafts and recovery journals cannot be read by the server. Deleted
 records cannot be reconstructed. Publishing refreshes the existing Sites plugin's
 tool catalogue; the mentor must still connect their own authorized account.
+
+The three MCP goal writers call writeGoal with the resolved authenticated owner.
+They reject shared viewers before database access, reject unknown arguments/owner
+overrides, and retain the existing origin, definition, reference and revision checks.
+Creation uses a caller-generated stable UUID for safe retries. Edits supply a complete
+definition and loaded revision; deletion needs ID/revision and preserves sessions.
+Responses acknowledge a successful write independently of progress reads. Ambiguous
+failures instruct callers to read goals before retrying. Write annotations explicitly
+mark modification/deletion; shared viewer permissions do not depend on annotations.
+Other records remain read-only through MCP. No schema migration or dependency changes.
 
 ## Migration safety
 

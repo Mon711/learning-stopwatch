@@ -3,6 +3,17 @@
 Git tracks individual changes. Record consequential choices, rationale and status
 here; explicitly supersede a decision when changing its semantics.
 
+## 011 — Owner goal writes through MCP
+
+23 November 2026, requested by the owner. Supersedes the goal read-only restriction
+in Decisions 005 and 010. Expose explicit create/update/delete tools through the
+existing goal service. Shared viewers retain read-only access and requests cannot
+select another owner. Use whole target minutes and inclusive India dates. Require
+stable retry IDs for creation and current revisions for edits/deletion; reuse the
+website's validation, atomic guards, edit history and live progress calculation.
+A write acknowledgement does not depend on a later progress read. Other MCP records
+remain read-only. No dependencies, migrations or sharing changes are needed.
+
 ## 010 — Complete saved-data access for MCP-only mentors
 
 19 November 2026, approved and published as Sites Version 19.

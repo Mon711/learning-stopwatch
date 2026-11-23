@@ -162,13 +162,13 @@ restoration and the current schema, and review mappings/open timers. After the f
 authorized owner write, compare original fields, counts and exact durations. A failed
 deployment may already have applied schema changes; inspect before retrying.
 
-## CSV and read-only MCP
+## CSV and MCP
 
 CSV exports ALL saved history regardless of report filters, including retained
 inactive records. Its existing six columns and session IDs in Optional Notes remain
 compatible with Learning_Tracker. Running/paused records are excluded.
 
-POST /mcp exposes only read tools:
+POST /mcp exposes five read tools:
 
 - get_learning_sessions: existing date/activity/include_in_progress arguments plus
   learning_area (name or stable ID) and activity_type. Filters combine with AND.
@@ -193,9 +193,19 @@ POST /mcp exposes only read tools:
 For example, session tool arguments with learning_area AI Engineering, activity_type
 Course and date 2026-11-17 retrieve that combination for that date. Use the activity
 or area tools for all-time totals. New metadata is additive; callers cannot choose
-an owner or write through MCP. Mentor reads use the same resolved learner.
+an owner. Only the authenticated writable owner can change goals through MCP. Mentor reads use the same resolved learner.
 
-The five tools cover the saved information behind Stopwatch, History, Learning
+MCP also exposes create_learning_goal, update_learning_goal and delete_learning_goal
+for the writable owner. Shared viewers remain read-only. Creation takes a stable UUID,
+name, inclusive start_date/end_date, positive whole target_minutes and scope (the same
+scope object returned by get_learning_goals). Reuse the UUID and definition after an
+uncertain creation. Updates supply all definition fields plus the latest revision;
+read the goal first and preserve fields the user did not ask to change. Deletion
+requires the goal ID and latest revision and removes its definition/edit history;
+sessions and tracked time remain. Read goals after an uncertain write before retrying.
+Other MCP records remain read-only. A fresh chat may be needed to discover new tools.
+
+The five read tools cover the saved information behind Stopwatch, History, Learning
 Totals, Goals and activity/area management. Session history supplies the data
 behind the CSV export; goal reads include definitions/history/results corresponding
 to the goal JSON backup. MCP returns data rather than clicking download buttons.

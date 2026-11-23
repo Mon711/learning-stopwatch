@@ -14,8 +14,12 @@ type RpcReply = {
   error: { code: number };
   result: {
     protocolVersion: string;
+    isError: boolean;
+    content: { type: string; text: string }[];
     tools: { name: string; annotations: { readOnlyHint: boolean } }[];
     structuredContent: {
+      saved: boolean;
+      id: string;
       date: string;
       sessions: { id: string; state: string; duration_minutes: number; what_i_did: string; optional_notes: string }[];
       total_completed_minutes: number;
@@ -28,7 +32,7 @@ type RpcReply = {
       by_learning_area: { id: string; total_completed_ms: number; inactive_minutes: number }[];
       by_activity_type: { type: string; total_completed_ms: number }[];
       by_activity: { id: string; status: string; total_completed_ms: number }[];
-      goals: { id: string; name: string; completed_ms: number; target_ms: number; period: string; status: string; progress_percent: number; remaining_minutes: number; over_target_minutes: number; scope_description: string; edit_history: { at: string; changes: { field: string; from: string; to: string }[] }[] }[];
+      goals: { id: string; revision: number; name: string; completed_ms: number; target_ms: number; period: string; status: string; progress_percent: number; remaining_minutes: number; over_target_minutes: number; scope_description: string; edit_history: { at: string; changes: { field: string; from: string; to: string }[] }[] }[];
     };
   };
 };
@@ -78,14 +82,15 @@ test('course names and links are validated before saving',()=>{
  assert.equal(courseInput({name:'Course'}).link,'');
 });
 
-test('discovery exposes all five read-only tools and no private records', async () => {
+test('discovery exposes five read tools and three explicit goal writes without private records', async () => {
   const f = fixture(null);
   try {
     const init = await f.send('initialize', { protocolVersion: '2025-03-26' });
     assert.equal(init.body.result.protocolVersion, '2025-03-26');
     const list = await f.send('tools/list');
-    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities','get_learning_areas','get_learning_goals','get_learning_totals']);
-    assert.ok(list.body.result.tools.every(t => t.annotations.readOnlyHint));
+    assert.deepEqual(list.body.result.tools.map((t: { name: string }) => t.name), ['get_learning_sessions','get_learning_activities','get_learning_areas','get_learning_goals','get_learning_totals','create_learning_goal','update_learning_goal','delete_learning_goal']);
+    assert.ok(list.body.result.tools.slice(0, 5).every(t => t.annotations.readOnlyHint));
+    assert.ok(list.body.result.tools.slice(5).every(t => !t.annotations.readOnlyHint));
     assert.equal(f.queries(), 0);
   } finally { f.close(); }
 });
@@ -265,5 +270,66 @@ test('new tools reject owner overrides and malformed ranges/filters before datab
       assert.equal((await f.send('tools/call', { name: 'get_learning_goals', arguments: args })).body.error.code, -32602);
     }
     assert.equal(f.queries(), 0);
+  } finally { f.close(); }
+});
+
+
+const goalArgs = { id: '77777777-7777-4777-8777-777777777777', name: 'MCP goal', start_date: '2026-10-04', end_date: '2026-10-04', target_minutes: 60, scope: { kind: 'all' } };
+test('MCP goal create/retry/edit/delete share UI progress/history and preserve sessions and foreign goals', async () => {
+  const f = fixture();
+  try {
+    await writeGoal(f.db, 'owner-b', { action: 'create', id: goalArgs.id, name: 'Private goal', startDay: goalArgs.start_date, endDay: goalArgs.end_date, targetMs: 60000, scope: {kind:'all'} }, now);
+    await ensureAreas(f.db, 'owner-a');
+    const sessions = f.sqlite.prepare('SELECT * FROM sessions ORDER BY id').all();
+    const call = (name: string, args: unknown) => f.send('tools/call', { name, arguments: args });
+    assert.equal((await call('create_learning_goal', goalArgs)).body.result.structuredContent.saved, true);
+    assert.equal((await call('create_learning_goal', goalArgs)).body.result.structuredContent.saved, true);
+    let goals = (await readGoals(f.db, 'owner-a', now)).goals;
+    assert.equal(goals.length, 1);
+    assert.equal(goals[0].completedMs, 2100000);
+    assert.equal(goals[0].targetMs, 3600000);
+    assert.equal(goals[0].history.length, 0);
+    assert.equal((await call('update_learning_goal', { ...goalArgs, name: 'Updated via MCP', target_minutes: 30, scope: { kind:'areas', areaIds: [initialAreas[0].id] }, revision: 0 })).body.result.structuredContent.saved, true);
+    goals = (await readGoals(f.db, 'owner-a', now)).goals;
+    assert.equal(goals[0].revision, 1);
+    assert.equal(goals[0].history.length, 1);
+    assert.equal(goals[0].history[0].changes.length, 3);
+    assert.equal(goals[0].completedMs, 1200000);
+    for (const name of ['update_learning_goal', 'delete_learning_goal']) {
+      const r = await call(name, name === 'update_learning_goal' ? {...goalArgs, revision:0} : {id:goalArgs.id, revision:0});
+      assert.equal(r.body.result.isError, true);
+      assert.match(r.body.result.content[0].text, /changed/);
+    }
+    assert.equal((await call('delete_learning_goal', {id:goalArgs.id, revision:1})).body.result.structuredContent.saved, true);
+    assert.equal((await readGoals(f.db, 'owner-a', now)).goals.length, 0);
+    assert.equal((await readGoals(f.db, 'owner-b', now)).goals[0].name, 'Private goal');
+    assert.deepEqual(f.sqlite.prepare('SELECT * FROM sessions ORDER BY id').all(), sessions);
+  } finally { f.close(); }
+});
+
+test('anonymous and shared-viewer MCP goal writes are rejected before database access', async () => {
+  for (const [owner, readOnly, status] of [[null, false, 401], ['owner-a', true, 403]] as const) {
+    const f = fixture(owner, readOnly);
+    try {
+      for (const name of ['create_learning_goal','update_learning_goal','delete_learning_goal']) {
+        assert.equal((await f.send('tools/call', {name})).status, status);
+      }
+      assert.equal(f.queries(), 0);
+    } finally { f.close(); }
+  }
+});
+
+test('MCP goal writes reject malformed definitions and owner/reference overrides', async () => {
+  const f = fixture();
+  try {
+    const call = (args: unknown, name = 'create_learning_goal') => f.send('tools/call', {name, arguments:args});
+    for (const patch of [{id:'bad'}, {name:''}, {start_date:'2026-02-30'}, {end_date:'2026-10-03'}, {target_minutes:0}, {target_minutes:0.5}, {target_minutes:'60'}, {scope:{kind:'areas',areaIds:[]}}, {scope:{kind:'areas',areaIds:['foreign-area']}}, {scope:{kind:'activity',activityId:'foreign-activity'}}, {scope:{kind:'all',owner:'owner-b'}}]) {
+      const r = await call({...goalArgs,...patch});
+      assert.ok(r.body.error || r.body.result.isError, JSON.stringify(patch));
+    }
+    for (const name of ['create_learning_goal','update_learning_goal','delete_learning_goal']) {
+      assert.equal((await call({owner:'owner-b'},name)).body.error.code, -32602);
+    }
+    assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM learning_goals').get()!.n, 0);
   } finally { f.close(); }
 });
